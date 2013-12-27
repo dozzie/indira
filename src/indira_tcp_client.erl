@@ -45,9 +45,9 @@ start(Args) ->
 % gen_fsm generic callbacks
 %-----------------------------------------------------------------------------
 
-init([_Socket, _ServerPid, _Acceptor] = Args) ->
+init([Socket, ServerPid, _Acceptor] = Args) ->
   io:fwrite("init: ~p~n", [Args]),
-  Data = #data{},
+  Data = #data{socket = Socket, server = ServerPid},
   {ok, 'READ_COMMAND', Data}.
 
 terminate(Reason, _StateName, _StateData) ->
@@ -65,6 +65,16 @@ handle_sync_event(_Event, _From, StateName, StateData) ->
   {reply, ok, StateName, StateData}.
 
 % message, possibly a network packet
+handle_info({tcp_closed, Socket} = _Info, _StateName, StateData) ->
+  io:fwrite("client disconnected (~p)~n", [Socket]),
+  gen_tcp:close(Socket),
+  {stop, normal, StateData#data{socket = undefined}};
+handle_info({tcp, Socket, Line} = Info,
+            StateName, StateData = #data{socket = Socket}) ->
+  io:fwrite("some command: ~p~n", [Info]),
+  % TODO: use gen_server:call() or gen_server:cast()
+  StateData#data.server ! {command, Line},
+  {next_state, StateName, StateData};
 handle_info(Info, StateName, StateData) ->
   io:fwrite("some message: ~p~n", [Info]),
   {next_state, StateName, StateData}.
