@@ -1,0 +1,9 @@
+{application, indira, [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [kernel, stdlib]},
+  {mod, {indira_app, []}},
+  {env, [
+  ]}
+]}.
