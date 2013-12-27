@@ -8,7 +8,7 @@
 % public API
 
 -export([start_link/1]).
--export([new_client_process/2]).
+-export([new_worker/2]).
 
 %-----------------------------------------------------------
 % supervisor callbacks
@@ -27,9 +27,9 @@
 start_link(Type) ->
   supervisor:start_link(?MODULE, Type).
 
--spec new_client_process(pid(), [term()]) -> {ok, pid()}.
+-spec new_worker(pid(), term()) -> {ok, pid()}.
 
-new_client_process(Supervisor, Args) ->
+new_worker(Supervisor, Args) ->
   case supervisor:start_child(Supervisor, [Args]) of
     {ok, Child}        -> {ok, Child};
     {ok, Child, _Info} -> {ok, Child};
@@ -57,7 +57,7 @@ init(accepted) ->
   Strategy = {simple_one_for_one, 5, 10},
   Children = [
     {undefined,
-      {indira_tcp_client, start_link, []},
+      {indira_tcp, start_link_client, []},
       temporary, 5000, worker, [indira_tcp_client]}
   ],
   {ok, {Strategy, Children}}.

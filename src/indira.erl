@@ -42,9 +42,9 @@ start() ->
 
 init(ListenSpec) ->
   io:fwrite("[indira] self() = ~p~n", [self()]),
-  {ok, Supervisor} = indira_tcp_sup:start_link(listening),
-  [indira_tcp_sup:new_client_process(Supervisor, Spec) || Spec <- ListenSpec],
-  State = #state{child_sup = Supervisor},
+  {ok, Sup} = indira_tcp_sup:start_link(listening),
+  [indira_tcp_sup:new_worker(Sup, {self(), Spec}) || Spec <- ListenSpec],
+  State = #state{child_sup = Sup},
   {ok, State}.
 
 terminate(normal, State) ->
