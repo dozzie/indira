@@ -21,7 +21,6 @@
 %-----------------------------------------------------------------------------
 
 start_link() ->
-  io:fwrite("indira sup: starting~n"),
   supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 %-----------------------------------------------------------------------------
@@ -29,12 +28,12 @@ start_link() ->
 %-----------------------------------------------------------------------------
 
 init([]) ->
-  io:fwrite("indira sup: init()~n"),
+  io:fwrite("[indira Sup] self() = ~p~n", [self()]),
   Sockets = case application:get_env(indira, listen) of
     {ok, Val} -> Val;
     undefined -> []
   end,
-  io:fwrite("indira sup: sockets = ~p~n", [Sockets]),
+  io:fwrite("[indira Sup] sockets = ~p~n", [Sockets]),
   Strategy = {one_for_one, 5, 10},
   Children = [
     {indira, {indira, start_link, [Sockets]},

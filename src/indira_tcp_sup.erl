@@ -25,7 +25,6 @@
   {ok, pid()} | {error, Reason :: term()}.
 
 start_link(Type) ->
-  io:fwrite("indira sup ~p: starting~n", [self()]),
   supervisor:start_link(?MODULE, Type).
 
 -spec new_client_process(pid(), [term()]) -> {ok, pid()}.
@@ -45,6 +44,7 @@ new_client_process(Supervisor, Args) ->
   {ok, {Strategy :: term(), Children :: term()}}.
 
 init(listening) ->
+  io:fwrite("[indira TCP Sup] self() = ~p~n", [self()]),
   Strategy = {simple_one_for_one, 5, 10},
   Children = [
     {undefined,

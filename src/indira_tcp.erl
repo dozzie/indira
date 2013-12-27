@@ -30,7 +30,7 @@
 %-----------------------------------------------------------------------------
 
 start_link(ListenSpec) ->
-  io:fwrite("indira TCP listener: ~p~n", [ListenSpec]),
+  io:fwrite("[indira TCP] starting: ~p~n", [ListenSpec]),
   gen_server:start_link(?MODULE, ListenSpec, []).
 
 %-----------------------------------------------------------------------------
@@ -38,6 +38,7 @@ start_link(ListenSpec) ->
 %-----------------------------------------------------------------------------
 
 init({tcp = _Protocol, Address, Port} = _ListenSpec) ->
+  io:fwrite("[indira TCP] self() = ~p~n", [self()]),
   % create listening socket
   BindOpt = address_to_bind_option(Address),
   {ok, Sock} = gen_tcp:listen(Port, BindOpt ++ [
@@ -62,7 +63,7 @@ init({tcp = _Protocol, Address, Port} = _ListenSpec) ->
 terminate(normal, State) ->
   terminate(shutdown, State);
 terminate(Reason, State) ->
-  io:fwrite("[indira stopping] (~p)~n", [Reason]),
+  io:fwrite("[indira TCP] stopping (~p)~n", [Reason]),
   unlink(State#state.listener),
   exit(State#state.listener, Reason),
   unlink(State#state.child_sup),
@@ -73,27 +74,27 @@ terminate(Reason, State) ->
 handle_call(Request, _From, State) ->
   case Request of
     stop ->
-      io:fwrite("[indira stopping]~n"),
+      io:fwrite("[indira TCP] stopping~n"),
       {stop, normal, ok, State};
     %{'EXIT', _Pid, shutdown} ->
     %  io:fwrite("[indira stopping on shutdown]~n"),
     %  {stop, shutdown, ok, State};
     _Any ->
-      io:fwrite("#indira#(C) ~p~n", [_Any]),
+      io:fwrite("[indira TCP] call: ~p~n", [_Any]),
       {reply, ok, State}
   end.
 
 handle_cast(_Request, State) ->
-  io:fwrite("#indira#(c) ~p~n", [_Request]),
+  io:fwrite("[indira TCP] cast: ~p~n", [_Request]),
   {noreply, State}.
 
 handle_info(Message, State) ->
   case Message of
     {command, Command} ->
-      io:fwrite("[indira] ~p~n", [Command]),
+      io:fwrite("[indira TCP] got command: ~p~n", [Command]),
       {noreply, State};
     _Any ->
-      io:fwrite("#indira#(i) ~p~n", [_Any]),
+      io:fwrite("[indira TCP] info: ~p~n", [_Any]),
       {noreply, State}
   end.
 
@@ -118,10 +119,11 @@ address_to_bind_option(Addr) when is_tuple(Addr) ->
 acceptor_loop(Sock, Parent, ChildSupervisor) ->
   case gen_tcp:accept(Sock) of
     {ok, Client} ->
-      io:fwrite("spawning new client handler~n"),
+      io:fwrite("[indira TCP acceptor] spawning new client handler~n"),
       {ok, Worker} = indira_tcp_sup:new_client_process(
         ChildSupervisor, [Client, Parent, self()]
       ),
+      io:fwrite("[indira TCP acceptor] worker is at ~p~n", [Worker]),
       gen_tcp:controlling_process(Client, Worker),
       inet:setopts(Client, [{active, true}]),
       acceptor_loop(Sock, Parent, ChildSupervisor);

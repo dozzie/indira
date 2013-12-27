@@ -29,7 +29,7 @@
 %-----------------------------------------------------------------------------
 
 start_link(ListenSpec) ->
-  io:fwrite("indira: ~p~n", [ListenSpec]),
+  io:fwrite("[indira] starting: ~p~n", [ListenSpec]),
   gen_server:start_link({local, ?MODULE}, ?MODULE, ListenSpec, []).
 
 % convenience wrapper
@@ -41,6 +41,7 @@ start() ->
 %-----------------------------------------------------------------------------
 
 init(ListenSpec) ->
+  io:fwrite("[indira] self() = ~p~n", [self()]),
   {ok, Supervisor} = indira_tcp_sup:start_link(listening),
   [indira_tcp_sup:new_client_process(Supervisor, Spec) || Spec <- ListenSpec],
   State = #state{child_sup = Supervisor},
@@ -49,33 +50,33 @@ init(ListenSpec) ->
 terminate(normal, State) ->
   terminate(shutdown, State);
 terminate(Reason, State) ->
-  io:fwrite("[indira stopping] unlinking children~n"),
+  io:fwrite("[indira] unlinking children...~n"),
   unlink(State#state.child_sup),
-  io:fwrite("[indira stopping] stopping children~n"),
+  io:fwrite("[indira] ...and stopping children~n"),
   exit(State#state.child_sup, Reason),
   ok.
 
 handle_call(Request, _From, State) ->
   case Request of
     stop ->
-      io:fwrite("[indira stopping]~n"),
+      io:fwrite("[indira] call: got stop request~n"),
       {stop, normal, ok, State};
     _Any ->
-      io:fwrite("#indira# ~p~n", [_Any]),
+      io:fwrite("[indira] call: WTF? ~p~n", [_Any]),
       {reply, ok, State}
   end.
 
 handle_cast(_Request, State) ->
-  io:fwrite("#indira# ~p~n", [_Request]),
+  io:fwrite("[indira] cast: WTF? ~p~n", [_Request]),
   {noreply, State}.
 
 handle_info(Message, State) ->
   case Message of
     {command, Command} ->
-      io:fwrite("[indira] ~p~n", [Command]),
+      io:fwrite("[indira] got command: ~p~n", [Command]),
       {noreply, State};
     _Any ->
-      io:fwrite("#indira# ~p~n", [_Any]),
+      io:fwrite("[indira] message: WTF? ~p~n", [_Any]),
       {noreply, State}
   end.
 

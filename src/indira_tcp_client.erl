@@ -34,11 +34,11 @@
 %-----------------------------------------------------------------------------
 
 start_link(Args) ->
-  io:fwrite("indira TCP client FSM: starting linked~n"),
+  io:fwrite("[indira FSM]: starting linked~n"),
   gen_fsm:start_link(?MODULE, Args, []).
 
 start(Args) ->
-  io:fwrite("indira TCP client FSM: starting~n"),
+  io:fwrite("[indira FSM]: starting~n"),
   gen_fsm:start(?MODULE, Args, []).
 
 %-----------------------------------------------------------------------------
@@ -46,37 +46,38 @@ start(Args) ->
 %-----------------------------------------------------------------------------
 
 init([Socket, ServerPid, _Acceptor] = Args) ->
-  io:fwrite("init: ~p~n", [Args]),
+  io:fwrite("[indira FSM] init: ~p~n", [Args]),
+  io:fwrite("[indira FSM] self() = ~p~n", [self()]),
   Data = #data{socket = Socket, server = ServerPid},
   {ok, 'READ_COMMAND', Data}.
 
 terminate(Reason, _StateName, _StateData) ->
-  io:fwrite("terminated because of ~p~n", [Reason]),
+  io:fwrite("[indira FSM] terminated: ~p~n", [Reason]),
   ok.
 
 % gen_fsm:send_all_state_event/2
 handle_event(_Event, StateName, StateData) ->
-  io:fwrite("async event (all states)~n"),
+  io:fwrite("[indira FSM] async event (all states)~n"),
   {next_state, StateName, StateData}.
 
 % gen_fsm:sync_send_all_state_event/2,3
 handle_sync_event(_Event, _From, StateName, StateData) ->
-  io:fwrite("sync event (all states)~n"),
+  io:fwrite("[indira FSM] sync event (all states)~n"),
   {reply, ok, StateName, StateData}.
 
 % message, possibly a network packet
 handle_info({tcp_closed, Socket} = _Info, _StateName, StateData) ->
-  io:fwrite("client disconnected (~p)~n", [Socket]),
+  io:fwrite("[indira FSM] client disconnected (~p)~n", [Socket]),
   gen_tcp:close(Socket),
   {stop, normal, StateData#data{socket = undefined}};
 handle_info({tcp, Socket, Line} = Info,
             StateName, StateData = #data{socket = Socket}) ->
-  io:fwrite("some command: ~p~n", [Info]),
+  io:fwrite("[indira FSM] got command: ~p~n", [Info]),
   % TODO: use gen_server:call() or gen_server:cast()
   StateData#data.server ! {command, Line},
   {next_state, StateName, StateData};
 handle_info(Info, StateName, StateData) ->
-  io:fwrite("some message: ~p~n", [Info]),
+  io:fwrite("[indira FSM] unknown message: ~p~n", [Info]),
   {next_state, StateName, StateData}.
 
 code_change(_OldVsn, StateName, StateData, _Extra) ->
@@ -107,11 +108,11 @@ code_change(_OldVsn, StateName, StateData, _Extra) ->
 %     {stop, Reason, #data{...}}
 
 'READ_COMMAND'(_Event, StateData) ->
-  io:fwrite("async event~n"),
+  io:fwrite("[indira FSM] async event~n"),
   {next_state, 'READ_COMMAND', StateData}.
 
 'READ_COMMAND'(_Event, _From, StateData) ->
-  io:fwrite("sync event~n"),
+  io:fwrite("[indira FSM] sync event~n"),
   {reply, ok, 'READ_COMMAND', StateData}.
 
 %-----------------------------------------------------------------------------
