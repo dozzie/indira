@@ -120,8 +120,7 @@ acceptor_loop(Sock, Parent, ChildSupervisor) ->
     {ok, Client} ->
       io:fwrite("spawning new client handler~n"),
       {ok, Worker} = indira_tcp_sup:new_client_process(
-        %ChildSupervisor, [Client, Parent]
-        ChildSupervisor, []
+        ChildSupervisor, [Client, Parent, self()]
       ),
       gen_tcp:controlling_process(Client, Worker),
       inet:setopts(Client, [{active, true}]),

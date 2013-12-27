@@ -45,9 +45,7 @@ start(Args) ->
 % gen_fsm generic callbacks
 %-----------------------------------------------------------------------------
 
-% TODO: [Socket, ServerPid] = Args
-%init([_Socket, _ServerPid] = Args) ->
-init(Args) ->
+init([_Socket, _ServerPid, _Acceptor] = Args) ->
   io:fwrite("init: ~p~n", [Args]),
   Data = #data{},
   {ok, 'READ_COMMAND', Data}.
