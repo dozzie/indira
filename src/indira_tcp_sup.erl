@@ -49,7 +49,7 @@ init(listening) ->
   Children = [
     {undefined,
       {indira_tcp, start_link, []},
-      permanent, 5000, worker, [indira_tcp]}
+      transient, 5000, worker, [indira_tcp]}
   ],
   {ok, {Strategy, Children}};
 
@@ -58,7 +58,7 @@ init(accepted) ->
   Children = [
     {undefined,
       {indira_tcp_client, start_link, []},
-      permanent, 5000, worker, [indira_tcp_client]}
+      temporary, 5000, worker, [indira_tcp_client]}
   ],
   {ok, {Strategy, Children}}.
 
