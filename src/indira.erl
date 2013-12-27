@@ -16,9 +16,7 @@
 
 -include_lib("kernel/include/inet.hrl").
 
--record(state, {
-  sockets = []
-}).
+-record(state, {child_sup}).
 
 %-----------------------------------------------------------------------------
 % public API
@@ -43,15 +41,18 @@ start() ->
 %-----------------------------------------------------------------------------
 
 init(ListenSpec) ->
-  ListenSockets = [listen(Proto, A, P) || {Proto, A, P} <- ListenSpec],
-  State = #state{sockets = ListenSockets},
+  {ok, Supervisor} = indira_tcp_sup:start_link(listening),
+  [indira_tcp_sup:new_client_process(Supervisor, Spec) || Spec <- ListenSpec],
+  State = #state{child_sup = Supervisor},
   {ok, State}.
 
-terminate(_Reason, State) ->
+terminate(normal, State) ->
+  terminate(shutdown, State);
+terminate(Reason, State) ->
   io:fwrite("[indira stopping] unlinking children~n"),
-  [unlink(Pid) || {tcp, _Sock, Pid} <- State#state.sockets],
-  io:fwrite("[indira stopping] killing children~n"),
-  [exit(Pid, stahp) || {tcp, _Sock, Pid} <- State#state.sockets],
+  unlink(State#state.child_sup),
+  io:fwrite("[indira stopping] stopping children~n"),
+  exit(State#state.child_sup, Reason),
   ok.
 
 handle_call(Request, _From, State) ->
@@ -59,9 +60,6 @@ handle_call(Request, _From, State) ->
     stop ->
       io:fwrite("[indira stopping]~n"),
       {stop, normal, ok, State};
-    %{'EXIT', _Pid, shutdown} ->
-    %  io:fwrite("[indira stopping on shutdown]~n"),
-    %  {stop, shutdown, ok, State};
     _Any ->
       io:fwrite("#indira# ~p~n", [_Any]),
       {reply, ok, State}
@@ -83,64 +81,6 @@ handle_info(Message, State) ->
 
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
-
-%-----------------------------------------------------------------------------
-% networking internals
-%-----------------------------------------------------------------------------
-
-listen(Proto, Addr, Port) when Proto == tcp andalso is_list(Addr) ->
-  listen(Proto, resolve(Addr), Port);
-
-listen(tcp, Addr, Port) ->
-  BindOpt = case Addr of
-    any -> [];
-    _   -> [{ip, Addr}]
-  end,
-  {ok, Sock} = gen_tcp:listen(Port, BindOpt ++ [
-    {active, false}, {reuseaddr, true},
-    list, {packet, line}
-  ]),
-  {ok, Pid} = start_link_acceptor({tcp, Sock}),
-  ok = gen_tcp:controlling_process(Sock, Pid),
-  {tcp, Sock, Pid}.
-
-%-----------------------------------------------------------------------------
-
-start_link_acceptor({tcp, Sock} = _SockSpec) ->
-  Self = self(),
-  Pid = spawn_link(fun() ->
-    acceptor_loop(Sock, Self)
-  end),
-  io:fwrite("<indira> new acceptor: ~p~n", [Pid]),
-  {ok, Pid}.
-
-acceptor_loop(Sock, Parent) ->
-  case gen_tcp:accept(Sock) of
-    {ok, Client} ->
-      Acceptor = self(),
-      spawn_link(fun() ->
-        % TODO: send commands to parent
-        Message = io_lib:format("unimplemented~n"
-                                "acceptor: ~p~n"
-                                "parent: ~p~n",
-                                [Acceptor, Parent]),
-        gen_tcp:send(Client, Message),
-        {ok, Peer} = inet:peername(Client),
-        Parent ! {client, Peer},
-        gen_tcp:close(Client),
-        ok
-      end),
-      acceptor_loop(Sock, Parent);
-    {error, _Reason} ->
-      % TODO: log this
-      acceptor_loop(Sock, Parent)
-  end.
-
-%-----------------------------------------------------------------------------
-
-resolve(Addr) ->
-  {ok, #hostent{h_addr_list = HostAddrs}} = inet:gethostbyname(Addr),
-  hd(HostAddrs).
 
 %-----------------------------------------------------------------------------
 % vim:ft=erlang:foldmethod=marker
