@@ -58,6 +58,9 @@ terminate(Reason, State) ->
 
 handle_call(Request, _From, State) ->
   case Request of
+    {command, Command} ->
+      io:fwrite("[indira] got command: ~p~n", [Command]),
+      {reply, ok, State};
     stop ->
       io:fwrite("[indira] call: got stop request~n"),
       {stop, normal, ok, State};
@@ -70,15 +73,9 @@ handle_cast(_Request, State) ->
   io:fwrite("[indira] cast: WTF? ~p~n", [_Request]),
   {noreply, State}.
 
-handle_info(Message, State) ->
-  case Message of
-    {command, Command} ->
-      io:fwrite("[indira] got command: ~p~n", [Command]),
-      {noreply, State};
-    _Any ->
-      io:fwrite("[indira] message: WTF? ~p~n", [_Any]),
-      {noreply, State}
-  end.
+handle_info(_Message, State) ->
+  io:fwrite("[indira] message: WTF? ~p~n", [_Message]),
+  {noreply, State}.
 
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.

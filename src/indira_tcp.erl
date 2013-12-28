@@ -90,15 +90,9 @@ handle_cast(_Request, State) ->
   io:fwrite("[indira TCP] cast: ~p~n", [_Request]),
   {noreply, State}.
 
-handle_info(Message, State) ->
-  case Message of
-    {command, Command} ->
-      io:fwrite("[indira TCP] got command: ~p~n", [Command]),
-      {noreply, State};
-    _Any ->
-      io:fwrite("[indira TCP] info: ~p~n", [_Any]),
-      {noreply, State}
-  end.
+handle_info(_Message, State) ->
+  io:fwrite("[indira TCP] info: ~p~n", [_Message]),
+  {noreply, State}.
 
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
@@ -148,7 +142,7 @@ reader_loop(Socket, CmdRecipient, Parent) ->
       ok;
     {tcp, Socket, Line} ->
       io:fwrite("[indira TCP client] command ~p~n", [Line]),
-      CmdRecipient ! {command, Line},
+      gen_server:call(CmdRecipient, {command, Line}),
       reader_loop(Socket, CmdRecipient, Parent);
     _Any ->
       % TODO: log this
