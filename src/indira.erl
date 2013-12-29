@@ -4,6 +4,8 @@
 
 -behaviour(gen_server).
 
+-export([command/2]).
+
 % public API for supervision tree
 -export([start_link/1]).
 -export([start/0]).
@@ -16,21 +18,24 @@
 
 -include_lib("kernel/include/inet.hrl").
 
--record(state, {child_sup}).
+-record(state, {}).
 
 %-----------------------------------------------------------------------------
 % public API
 %-----------------------------------------------------------------------------
 
-% nuffin yet
+% send command to Indira process
+command(Indira, Line) ->
+  gen_server:call(Indira, {command, Line}).
 
 %-----------------------------------------------------------------------------
 % public API for supervision tree
 %-----------------------------------------------------------------------------
 
-start_link(ListenSpec) ->
-  io:fwrite("[indira] starting: ~p~n", [ListenSpec]),
-  gen_server:start_link({local, ?MODULE}, ?MODULE, ListenSpec, []).
+start_link(Parent) ->
+  io:fwrite("[indira] starting: ~p~n", [Parent]),
+  % TODO: don't require registering new process
+  gen_server:start_link({local, ?MODULE}, ?MODULE, Parent, []).
 
 % convenience wrapper
 start() ->
@@ -40,20 +45,35 @@ start() ->
 % gen_server API
 %-----------------------------------------------------------------------------
 
-init(ListenSpec) ->
+init(Parent) ->
   io:fwrite("[indira] self() = ~p~n", [self()]),
-  {ok, Sup} = indira_tcp_sup:start_link(listening),
-  [indira_tcp_sup:new_worker(Sup, {self(), Spec}) || Spec <- ListenSpec],
-  State = #state{child_sup = Sup},
+
+  % I can't call parent until this function finishes; I'll add a message to
+  % process' mailbox for handling later (just calling `spawn_listeners/2')
+  self() ! {spawn_listeners, Parent},
+
+  State = #state{},
   {ok, State}.
 
-terminate(normal, State) ->
-  terminate(shutdown, State);
-terminate(Reason, State) ->
-  io:fwrite("[indira] unlinking children...~n"),
-  unlink(State#state.child_sup),
-  io:fwrite("[indira] ...and stopping children~n"),
-  exit(State#state.child_sup, Reason),
+%% @private spawn_listeners(Parent, State) -> {ok, NewState} {{{
+spawn_listeners(Parent, State) ->
+  {ok, ListenerSup} = indira_sup:start_listener_pool(Parent),
+
+  SpecList = case application:get_env(indira, listen) of
+    {ok, L} -> L;
+    undefined -> []
+  end,
+
+  [indira_sup:start_listener(ListenerSup, ChildSpec) ||
+    {EntryModule, Args} <- SpecList,
+    ChildSpec <- [EntryModule:supervision_child_spec(self(), Args)]],
+
+  % TODO: I could use remembering children
+
+  {ok, State}.
+% }}}
+
+terminate(_Reason, _State) ->
   ok.
 
 handle_call(Request, _From, State) ->
@@ -73,6 +93,10 @@ handle_cast(_Request, State) ->
   io:fwrite("[indira] cast: WTF? ~p~n", [_Request]),
   {noreply, State}.
 
+handle_info({spawn_listeners, Parent}, State) ->
+  % adding listeners supervision tree, as promised in `init/1'
+  {ok, NewState} = spawn_listeners(Parent, State),
+  {noreply, NewState};
 handle_info(_Message, State) ->
   io:fwrite("[indira] message: WTF? ~p~n", [_Message]),
   {noreply, State}.
