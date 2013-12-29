@@ -33,7 +33,6 @@ command(Indira, Line) ->
 %-----------------------------------------------------------------------------
 
 start_link(Parent) ->
-  io:fwrite("[indira] starting: ~p~n", [Parent]),
   % TODO: don't require registering new process
   gen_server:start_link({local, ?MODULE}, ?MODULE, Parent, []).
 
@@ -46,8 +45,6 @@ start() ->
 %-----------------------------------------------------------------------------
 
 init(Parent) ->
-  io:fwrite("[indira] self() = ~p~n", [self()]),
-
   % I can't call parent until this function finishes; I'll add a message to
   % process' mailbox for handling later (just calling `spawn_listeners/2')
   self() ! {spawn_listeners, Parent},
@@ -82,7 +79,6 @@ handle_call(Request, _From, State) ->
       io:fwrite("[indira] got command: ~p~n", [Command]),
       {reply, ok, State};
     stop ->
-      io:fwrite("[indira] call: got stop request~n"),
       {stop, normal, ok, State};
     _Any ->
       io:fwrite("[indira] call: WTF? ~p~n", [_Any]),
@@ -102,6 +98,7 @@ handle_info(_Message, State) ->
   {noreply, State}.
 
 code_change(_OldVsn, State, _Extra) ->
+  io:fwrite("[indira] code change~n"),
   {ok, State}.
 
 %-----------------------------------------------------------------------------

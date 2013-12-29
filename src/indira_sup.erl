@@ -22,7 +22,7 @@
 %-----------------------------------------------------------------------------
 
 start_link() ->
-  supervisor:start_link(?MODULE, []).
+  supervisor:start_link(?MODULE, indira_root).
 
 start_link(listener) ->
   supervisor:start_link(?MODULE, listener).
@@ -36,15 +36,9 @@ start_listener_pool(Supervisor) ->
     {?MODULE, start_link, [listener]},
     temporary, 5000, supervisor, [?MODULE]
   },
-  case supervisor:start_child(Supervisor, ChildSup) of
-    {ok, Pid} ->
-      {ok, Pid};
-    {ok, Pid, _Info} ->
-      {ok, Pid};
-    {error, Reason} ->
-      {error, Reason}
-  end.
+  strip_info(supervisor:start_child(Supervisor, ChildSup)).
 
+% add new listener child (worker or supervision tree) to existing supervisor
 start_listener(Supervisor, {{M,F,A}, ChildType} = _Spec) ->
   Child = {
     % I don't plan to manually stop/restart children anyway, and this function
@@ -55,22 +49,23 @@ start_listener(Supervisor, {{M,F,A}, ChildType} = _Spec) ->
     {M, F, A},
     permanent, 5000, ChildType, [M]
   },
-  io:fwrite("[indira sup] ~p adding child ~p~n", [self(), Child]),
-  case supervisor:start_child(Supervisor, Child) of
-    {ok, Pid} ->
-      {ok, Pid};
-    {ok, Pid, _Info} ->
-      {ok, Pid};
-    {error, Reason} ->
-      {error, Reason}
-  end.
+  strip_info(supervisor:start_child(Supervisor, Child)).
+
+
+% strip `Info' field from `{ok, Child, Info}' tuple, to always return
+% `{ok, Child}' on success
+strip_info({ok, _Child} = Result) ->
+  Result;
+strip_info({ok, Child, _Info}) ->
+  {ok, Child};
+strip_info(Any) ->
+  Any.
 
 %-----------------------------------------------------------------------------
 % supervisor callbacks
 %-----------------------------------------------------------------------------
 
-init([]) ->
-  io:fwrite("[indira sup] top supervisor~n"),
+init(indira_root) ->
   Strategy = {one_for_all, 5, 10},
   Children = [{
     indira,
@@ -80,7 +75,6 @@ init([]) ->
   {ok, {Strategy, Children}};
 
 init(listener) ->
-  io:fwrite("[indira sup] listeners supervisor~n"),
   Strategy = {one_for_one, 5, 10},
   Children = [],
   {ok, {Strategy, Children}}.

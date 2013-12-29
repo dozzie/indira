@@ -44,11 +44,9 @@ start_worker_pool(Supervisor, CmdRecipient) ->
       permanent, 5000, supervisor, [?MODULE]
   },
   Result = supervisor:start_child(Supervisor, Child),
-  io:fwrite("[] starting worker pool: ~p~n", [Result]),
   strip_info(Result).
 
 new_worker(Supervisor, ClientSocket) ->
-  io:fwrite("[] starting child in ~p~n", [Supervisor]),
   strip_info(supervisor:start_child(Supervisor, [ClientSocket])).
 
 
@@ -66,7 +64,6 @@ strip_info(Any) ->
 %-----------------------------------------------------------------------------
 
 init([acceptor, CmdRecipient, Host, Port] = _Args) ->
-  io:fwrite("[indira TCP sup] self() = ~p~n", [self()]),
   Strategy = {one_for_all, 5, 10},
   Children = [
     {indira_tcp,
@@ -76,7 +73,6 @@ init([acceptor, CmdRecipient, Host, Port] = _Args) ->
   {ok, {Strategy, Children}};
 
 init([worker, CmdRecipient] = _Args) ->
-  io:fwrite("[indira TCP sup worker] self() = ~p~n", [self()]),
   Strategy = {simple_one_for_one, 5, 10},
   Children = [
     {undefined,

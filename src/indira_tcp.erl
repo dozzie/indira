@@ -38,7 +38,6 @@ supervision_child_spec(CmdRecipient, {Host, Port} = _Args) ->
 % spawn process that listens on TCP socket, accepts connections and spawns
 % reader workers
 start_link(Supervisor, CmdRecipient, Host, Port) ->
-  io:fwrite("[indira TCP] starting: ~p~n", [[CmdRecipient, Host, Port]]),
   {_, Ref} = Parent = {self(), make_ref()},
   Pid = spawn_link(fun() ->
     % NOTE: most probably `Parent = Supervisor', but this way I don't insist
@@ -52,10 +51,9 @@ start_link(Supervisor, CmdRecipient, Host, Port) ->
   {ok, Pid}.
 
 % spawn process that reads everything from TCP socket
-% (not a part of gen_server; probably should get extracted)
 start_link_worker(CmdRecipient, ClientSocket) ->
   Pid = spawn_link(fun() ->
-    worker_loop(ClientSocket, CmdRecipient)
+    start_worker(ClientSocket, CmdRecipient)
   end),
   {ok, Pid}.
 
@@ -64,8 +62,6 @@ start_link_worker(CmdRecipient, ClientSocket) ->
 %-----------------------------------------------------------------------------
 
 start_acceptor({Parent, Ref}, Supervisor, CmdRecipient, Address, Port) ->
-  io:fwrite("[indira TCP] self() = ~p~n", [self()]),
-
   % create listening socket
   BindOpt = address_to_bind_option(Address),
   {ok, Socket} = gen_tcp:listen(Port, BindOpt ++ [
@@ -88,15 +84,20 @@ start_acceptor({Parent, Ref}, Supervisor, CmdRecipient, Address, Port) ->
 
 % accept client connection and spawn new worker for it
 acceptor_loop(State) ->
+  % TODO: code change?
+  % TODO: consume messages so mailbox won't fill up
   case gen_tcp:accept(State#state.socket) of
     {ok, Client} ->
-      io:fwrite("[indira TCP acceptor] spawning new client handler~n"),
+      % spawn new worker
       Supervisor = State#state.worker_pool_sup,
       {ok, Worker} = indira_tcp_sup:new_worker(Supervisor, Client),
-      io:fwrite("[indira TCP acceptor] worker is at ~p~n", [Worker]),
+
+      % assign client socket to the newly spawned worker and make it active
       gen_tcp:controlling_process(Client, Worker),
       inet:setopts(Client, [{active, true}]),
+
       acceptor_loop(State);
+
     {error, _Reason} ->
       % TODO: log this
       acceptor_loop(State)
@@ -106,21 +107,25 @@ acceptor_loop(State) ->
 % per-connection (per-client) worker
 %-----------------------------------------------------------------------------
 
+% This function has two reasons to exist:
+%   * it's similar to acceptor's structure
+%   * I may add informing CmdRecipient about new connection
+start_worker(ClientSocket, CmdRecipient) ->
+  worker_loop(ClientSocket, CmdRecipient).
+
 % read everything from TCP socket
-% (not a part of gen_server; probably should get extracted)
 worker_loop(ClientSocket, CmdRecipient) ->
+  % TODO: code change?
   receive
     {tcp_closed, ClientSocket} ->
       gen_tcp:close(ClientSocket),
-      io:fwrite("[indira TCP client] stopping~n"),
       ok;
     {tcp, ClientSocket, Line} ->
-      io:fwrite("[indira TCP client] command ~p~n", [Line]),
       indira:command(CmdRecipient, Line),
       worker_loop(ClientSocket, CmdRecipient);
     _Any ->
       % TODO: log this
-      io:fwrite("[indira TCP client] unknown message: ~p~n", [_Any]),
+      io:fwrite("[indira TCP client] got a message: ~p~n", [_Any]),
       worker_loop(ClientSocket, CmdRecipient)
   end.
 
