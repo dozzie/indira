@@ -5,9 +5,17 @@
 -module(indira_tcp).
 
 -behaviour(indira_listener).
+-behaviour(gen_server).
+
+%-----------------------------------------------------------------------------
 
 % Indira listener API
 -export([supervision_child_spec/2]).
+
+% gen_server API
+-export([init/1, terminate/2]).
+-export([handle_call/3, handle_cast/2, handle_info/2]).
+-export([code_change/3]).
 
 % public API for supervision tree
 -export([start_link/4]).
@@ -15,9 +23,21 @@
 
 %-----------------------------------------------------------------------------
 
+-define(ACCEPT_TIMEOUT, 300). % somewhat arbitrary
+
+-define(RETURN  (Reply, State),            {  reply,      Reply, State, 0}).
+-define(NORETURN       (State),            {noreply,             State, 0}).
+-define(STOP_RETURN(Reason, Reply, State), {stop, Reason, Reply, State}).
+-define(STOP       (Reason,        State), {stop, Reason,        State}).
+-define(INIT_OK    (State),  {ok, State, 0}).
+-define(CODE_CHANGE(State),  {ok, State}). % NOTE: timeout not applicable
+
+%-----------------------------------------------------------------------------
+
 -include_lib("kernel/include/inet.hrl").
 
--record(state, {socket, worker_pool_sup, command_recipient}).
+-record(listen, {socket, worker_pool_sup}).
+-record(client, {socket, command_recipient}).
 
 %-----------------------------------------------------------------------------
 % Indira listener API
@@ -38,96 +58,112 @@ supervision_child_spec(CmdRecipient, {Host, Port} = _Args) ->
 % spawn process that listens on TCP socket, accepts connections and spawns
 % reader workers
 start_link(Supervisor, CmdRecipient, Host, Port) ->
-  {_, Ref} = Parent = {self(), make_ref()},
-  Pid = spawn_link(fun() ->
-    % NOTE: most probably `Parent = Supervisor', but this way I don't insist
-    % on it
-    start_acceptor(Parent, Supervisor, CmdRecipient, Host, Port)
-  end),
-  % synchronize with child (will be killed by link on error)
-  receive
-    {Ref, bound} -> ok
-  end,
-  {ok, Pid}.
+  Args = [listener, Supervisor, CmdRecipient, Host, Port],
+  gen_server:start_link(?MODULE, Args, []).
 
 % spawn process that reads everything from TCP socket
 start_link_worker(CmdRecipient, ClientSocket) ->
-  Pid = spawn_link(fun() ->
-    start_worker(ClientSocket, CmdRecipient)
-  end),
-  {ok, Pid}.
+  Args = [worker, CmdRecipient, ClientSocket],
+  gen_server:start_link(?MODULE, Args, []).
 
 %-----------------------------------------------------------------------------
 % connection acceptor
 %-----------------------------------------------------------------------------
 
-start_acceptor({Parent, Ref}, Supervisor, CmdRecipient, Address, Port) ->
+init([listener, Supervisor, CmdRecipient, Host, Port]) ->
   % create listening socket
-  BindOpt = address_to_bind_option(Address),
+  BindOpt = address_to_bind_option(Host),
   {ok, Socket} = gen_tcp:listen(Port, BindOpt ++ [
     {active, false}, {reuseaddr, true}, list, {packet, line}
   ]),
-  % synchronize with parent
-  Parent ! {Ref, bound},
 
-  % NOTE: this call must go after synchronizing to parent, since the
-  % `Supervisor' still waits for `Parent' to return
+  % first thing to do after this call is finished, the workers pool must be
+  % retrieved
+  % TODO: explain why there's no race condition between gen_tcp:accept() and
+  % ?MODULE:handle_info()
+  self() ! {start_worker_pool, Supervisor, CmdRecipient},
+
+  State = #listen{socket = Socket, worker_pool_sup = undefined},
+  ?INIT_OK(State);
+
+init([worker, CmdRecipient, ClientSocket]) ->
+  State = #client{socket = ClientSocket, command_recipient = CmdRecipient},
+  ?INIT_OK(State).
+
+
+% @private
+% retrieve workers pool, as promised in init(listener)
+start_worker_pool(Supervisor, CmdRecipient,
+                  State = #listen{worker_pool_sup = undefined}) ->
   {ok, WorkerPoolSup} =
     indira_tcp_sup:start_worker_pool(Supervisor, CmdRecipient),
+  State#listen{worker_pool_sup = WorkerPoolSup}.
 
-  State = #state{
-    socket = Socket,
-    worker_pool_sup = WorkerPoolSup,
-    command_recipient = CmdRecipient
-  },
-  acceptor_loop(State).
 
-% accept client connection and spawn new worker for it
-acceptor_loop(State) ->
-  % TODO: code change?
-  % TODO: consume messages so mailbox won't fill up
-  case gen_tcp:accept(State#state.socket) of
+terminate(_Reason, _State = #listen{socket = Socket}) ->
+  gen_tcp:close(Socket),
+  ok;
+
+terminate(_Reason, _State = #client{socket = Socket}) ->
+  gen_tcp:close(Socket),
+  ok.
+
+
+code_change(_OldVsn, State, _Extra) ->
+  ?CODE_CHANGE(State).
+
+
+handle_call(stop, _From, State) ->
+  ?STOP_RETURN(normal, ok, State);
+handle_call(_Request, _From, State) ->
+  ?NORETURN(State). % ignore unknown calls
+
+
+handle_cast(_Request, State) ->
+  ?NORETURN(State). % ignore unknown casts
+
+
+handle_info({start_worker_pool, Sup, Cmd}, State = #listen{}) ->
+  NewState = start_worker_pool(Sup, Cmd, State),
+  ?NORETURN(NewState);
+
+handle_info(timeout, State = #listen{}) ->
+  #listen{socket = Socket, worker_pool_sup = Supervisor} = State,
+
+  case gen_tcp:accept(Socket, ?ACCEPT_TIMEOUT) of
     {ok, Client} ->
       % spawn new worker
-      Supervisor = State#state.worker_pool_sup,
       {ok, Worker} = indira_tcp_sup:new_worker(Supervisor, Client),
 
       % assign client socket to the newly spawned worker and make it active
       gen_tcp:controlling_process(Client, Worker),
       inet:setopts(Client, [{active, true}]),
 
-      acceptor_loop(State);
+      ?NORETURN(State);
+
+    {error, timeout} ->
+      % OK, expected thing
+      ?NORETURN(State);
 
     {error, _Reason} ->
       % TODO: log this
-      acceptor_loop(State)
-  end.
+      ?NORETURN(State)
+  end;
 
-%-----------------------------------------------------------------------------
-% per-connection (per-client) worker
-%-----------------------------------------------------------------------------
+% ignore other messages
+handle_info(_Any, State = #listen{}) ->
+  ?NORETURN(State);
 
-% This function has two reasons to exist:
-%   * it's similar to acceptor's structure
-%   * I may add informing CmdRecipient about new connection
-start_worker(ClientSocket, CmdRecipient) ->
-  worker_loop(ClientSocket, CmdRecipient).
+handle_info({tcp_closed, Socket}, State = #client{socket = Socket}) ->
+  gen_tcp:close(Socket),
+  ?STOP(normal, State);
 
-% read everything from TCP socket
-worker_loop(ClientSocket, CmdRecipient) ->
-  % TODO: code change?
-  receive
-    {tcp_closed, ClientSocket} ->
-      gen_tcp:close(ClientSocket),
-      ok;
-    {tcp, ClientSocket, Line} ->
-      indira:command(CmdRecipient, Line),
-      worker_loop(ClientSocket, CmdRecipient);
-    _Any ->
-      % TODO: log this
-      io:fwrite("[indira TCP client] got a message: ~p~n", [_Any]),
-      worker_loop(ClientSocket, CmdRecipient)
-  end.
+handle_info({tcp, Socket, Line}, State = #client{socket = Socket}) ->
+  indira:command(State#client.command_recipient, Line),
+  ?NORETURN(State);
+
+handle_info(_Any, State = #client{}) ->
+  ?NORETURN(State).
 
 %-----------------------------------------------------------------------------
 % network helpers

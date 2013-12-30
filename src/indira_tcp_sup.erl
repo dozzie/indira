@@ -41,7 +41,8 @@ start_worker_pool(Supervisor, CmdRecipient) ->
   Child = {
     indira_tcp_worker_pool_sup,
       {?MODULE, start_link_worker, [CmdRecipient]},
-      permanent, 5000, supervisor, [?MODULE]
+      % NOTE: listener will ask for this again, so no restart
+      temporary, 5000, supervisor, [?MODULE]
   },
   Result = supervisor:start_child(Supervisor, Child),
   strip_info(Result).
