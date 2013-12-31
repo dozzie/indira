@@ -1,4 +1,25 @@
 %-----------------------------------------------------------------------------
+%
+% Indira, Mother of D(a)emons.
+% Helper application for running Erlang programs as unix daemons.
+%
+% Indira provides management protocol through TCP/SSL/UNIX/... sockets, which
+% helps in following (somewhat tedious) tasks:
+%   * check if the daemon finished its starting procedure
+%   * order the daemon to shut down
+%   * order the daemon to reload configuration (but how to reload, its up to
+%     daemon's author)
+%   * retrieve metrics/status info from daemon
+%   * other management commands
+%
+% Note that Indira IS NOT a module for loading data. It may be highly
+% inefficient. For management interface it shouldn't matter, though: commands
+% are typically a low-bandwidth traffic.
+%
+% This module is both an API for listeners and an implementation of protocol
+% parser + command forwarder.
+%
+%-----------------------------------------------------------------------------
 
 -module(indira).
 

@@ -1,5 +1,11 @@
 %-----------------------------------------------------------------------------
-% TCP listener
+%
+% TCP listener.
+% TCP connection handler.
+%
+% NOTE: This module serves two purposes. It probably should be split to two
+% separate modules.
+%
 %-----------------------------------------------------------------------------
 
 -module(indira_tcp).

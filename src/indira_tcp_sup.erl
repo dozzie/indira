@@ -1,4 +1,11 @@
 %-----------------------------------------------------------------------------
+%
+% Indira TCP listener supervisor.
+% TCP workers supervisor (worker pool).
+%
+% NOTE: Yes, this module serves two purposes, depending on call options.
+%
+%-----------------------------------------------------------------------------
 
 -module(indira_tcp_sup).
 

@@ -1,4 +1,11 @@
 %-----------------------------------------------------------------------------
+%
+% Indira application (toplevel) supervisor.
+% Supervisor for listeners (see `indira_listener' module).
+%
+% NOTE: Yes, this module serves two purposes, depending on call options.
+%
+%-----------------------------------------------------------------------------
 
 -module(indira_sup).
 
