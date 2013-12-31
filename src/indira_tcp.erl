@@ -18,7 +18,7 @@
 -export([code_change/3]).
 
 % public API for supervision tree
--export([start_link/4]).
+-export([start_link/3]).
 -export([start_link_worker/2]).
 
 %-----------------------------------------------------------------------------
@@ -57,8 +57,8 @@ supervision_child_spec(CmdRecipient, {Host, Port} = _Args) ->
 
 % spawn process that listens on TCP socket, accepts connections and spawns
 % reader workers
-start_link(Supervisor, CmdRecipient, Host, Port) ->
-  Args = [listener, Supervisor, CmdRecipient, Host, Port],
+start_link(Supervisor, Host, Port) ->
+  Args = [listener, Supervisor, Host, Port],
   gen_server:start_link(?MODULE, Args, []).
 
 % spawn process that reads everything from TCP socket
@@ -70,7 +70,7 @@ start_link_worker(CmdRecipient, ClientSocket) ->
 % connection acceptor
 %-----------------------------------------------------------------------------
 
-init([listener, Supervisor, CmdRecipient, Host, Port]) ->
+init([listener, Supervisor, Host, Port]) ->
   % create listening socket
   BindOpt = address_to_bind_option(Host),
   {ok, Socket} = gen_tcp:listen(Port, BindOpt ++ [
@@ -81,7 +81,7 @@ init([listener, Supervisor, CmdRecipient, Host, Port]) ->
   % retrieved
   % TODO: explain why there's no race condition between gen_tcp:accept() and
   % ?MODULE:handle_info()
-  self() ! {start_worker_pool, Supervisor, CmdRecipient},
+  self() ! {start_worker_pool, Supervisor},
 
   State = #listen{socket = Socket, worker_pool_sup = undefined},
   ?INIT_OK(State);
@@ -93,10 +93,9 @@ init([worker, CmdRecipient, ClientSocket]) ->
 
 % @private
 % retrieve workers pool, as promised in init(listener)
-start_worker_pool(Supervisor, CmdRecipient,
-                  State = #listen{worker_pool_sup = undefined}) ->
+start_worker_pool(Supervisor, State = #listen{worker_pool_sup = undefined}) ->
   {ok, WorkerPoolSup} =
-    indira_tcp_sup:start_worker_pool(Supervisor, CmdRecipient),
+    indira_tcp_sup:start_worker_pool(Supervisor),
   State#listen{worker_pool_sup = WorkerPoolSup}.
 
 
@@ -123,8 +122,8 @@ handle_cast(_Request, State) ->
   ?NORETURN(State). % ignore unknown casts
 
 
-handle_info({start_worker_pool, Sup, Cmd}, State = #listen{}) ->
-  NewState = start_worker_pool(Sup, Cmd, State),
+handle_info({start_worker_pool, Sup}, State = #listen{}) ->
+  NewState = start_worker_pool(Sup, State),
   ?NORETURN(NewState);
 
 handle_info(timeout, State = #listen{}) ->

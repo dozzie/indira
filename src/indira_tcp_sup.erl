@@ -12,7 +12,7 @@
 % starting this supervisor as a workers pool (internal function)
 -export([start_link_worker/1]).
 % supervisor that acts as a workers pool (starting supervisor and its worker)
--export([start_worker_pool/2, new_worker/2]).
+-export([start_worker_pool/1, new_worker/2]).
 
 %-----------------------------------------------------------
 % supervisor callbacks
@@ -37,15 +37,12 @@ start_link_worker(CmdRecipient) ->
 %-----------------------------------------------------------
 % wrappers around `supervisor' module
 
-start_worker_pool(Supervisor, CmdRecipient) ->
-  Child = {
-    indira_tcp_worker_pool_sup,
-      {?MODULE, start_link_worker, [CmdRecipient]},
-      % NOTE: listener will ask for this again, so no restart
-      temporary, 5000, supervisor, [?MODULE]
-  },
-  Result = supervisor:start_child(Supervisor, Child),
-  strip_info(Result).
+start_worker_pool(Supervisor) ->
+  % NOTE: this is somewhat ugly to manually search through the children, but
+  % I have little better alternatives on how this should work actually
+  Children = supervisor:which_children(Supervisor),
+  {_, Pid, _, _} = lists:keyfind(indira_tcp_worker_pool_sup, 1, Children),
+  {ok, Pid}.
 
 new_worker(Supervisor, ClientSocket) ->
   strip_info(supervisor:start_child(Supervisor, [ClientSocket])).
@@ -68,8 +65,11 @@ init([acceptor, CmdRecipient, Host, Port] = _Args) ->
   Strategy = {one_for_all, 5, 10},
   Children = [
     {indira_tcp,
-      {indira_tcp, start_link, [self(), CmdRecipient, Host, Port]},
-      permanent, 5000, worker, [indira_tcp]}
+      {indira_tcp, start_link, [self(), Host, Port]},
+      permanent, 5000, worker, [indira_tcp]},
+    {indira_tcp_worker_pool_sup,
+      {?MODULE, start_link_worker, [CmdRecipient]},
+      permanent, 5000, supervisor, [?MODULE]}
   ],
   {ok, {Strategy, Children}};
 
