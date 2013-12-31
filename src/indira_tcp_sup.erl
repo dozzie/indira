@@ -45,6 +45,7 @@ start_link_worker(CmdRecipient) ->
 % wrappers around `supervisor' module
 
 start_worker_pool(Supervisor) ->
+  % FIXME: this is subject to a race condition with parent
   % NOTE: this is somewhat ugly to manually search through the children, but
   % I have little better alternatives on how this should work actually
   Children = supervisor:which_children(Supervisor),

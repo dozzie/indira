@@ -38,12 +38,12 @@ start_link(listener) ->
 
 % {ok, Pid} | {error, Reason}
 start_listener_pool(Supervisor) ->
-  ChildSup = {
-    indira_listener,
-    {?MODULE, start_link, [listener]},
-    temporary, 5000, supervisor, [?MODULE]
-  },
-  strip_info(supervisor:start_child(Supervisor, ChildSup)).
+  % FIXME: this is subject to a race condition with parent
+  % NOTE: this is somewhat ugly to manually search through the children, but
+  % I have little better alternatives on how this should work actually
+  Children = supervisor:which_children(Supervisor),
+  {_, Pid, _, _} = lists:keyfind(indira_listener, 1, Children),
+  {ok, Pid}.
 
 % add new listener child (worker or supervision tree) to existing supervisor
 start_listener(Supervisor, {{M,F,A}, ChildType} = _Spec) ->
@@ -74,11 +74,14 @@ strip_info(Any) ->
 
 init(indira_root) ->
   Strategy = {one_for_all, 5, 10},
-  Children = [{
-    indira,
-    {indira, start_link, [self()]},
-    permanent, 5000, worker, [indira]
-  }],
+  Children = [
+    {indira,
+      {indira, start_link, [self()]},
+      permanent, 5000, worker, [indira]},
+    {indira_listener,
+      {?MODULE, start_link, [listener]},
+      permanent, 5000, supervisor, [?MODULE]}
+  ],
   {ok, {Strategy, Children}};
 
 init(listener) ->
