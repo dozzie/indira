@@ -97,16 +97,19 @@ terminate(_Reason, _State) ->
 handle_call(Request, _From, State) ->
   case Request of
     {command, Command} ->
+      % TODO: error_logger:info_report()
       io:fwrite("[indira] got command: ~p~n", [Command]),
       {reply, ok, State};
     stop ->
       {stop, normal, ok, State};
     _Any ->
+      % TODO: error_logger:info_report()
       io:fwrite("[indira] call: WTF? ~p~n", [_Any]),
       {reply, ok, State}
   end.
 
 handle_cast(_Request, State) ->
+  % TODO: error_logger:info_report()
   io:fwrite("[indira] cast: WTF? ~p~n", [_Request]),
   {noreply, State}.
 
@@ -115,10 +118,12 @@ handle_info({spawn_listeners, Parent}, State) ->
   {ok, NewState} = spawn_listeners(Parent, State),
   {noreply, NewState};
 handle_info(_Message, State) ->
+  % TODO: error_logger:info_report()
   io:fwrite("[indira] message: WTF? ~p~n", [_Message]),
   {noreply, State}.
 
 code_change(_OldVsn, State, _Extra) ->
+  % TODO: error_logger:info_report()
   io:fwrite("[indira] code change~n"),
   {ok, State}.
 
