@@ -1,9 +1,6 @@
 %%%---------------------------------------------------------------------------
 %%%
 %%% Indira TCP listener supervisor.
-%%% TCP workers supervisor (worker pool).
-%%%
-%%% NOTE: Yes, this module serves two purposes, depending on call options.
 %%%
 %%%---------------------------------------------------------------------------
 
@@ -11,13 +8,11 @@
 
 -behaviour(supervisor).
 
-%% acceptors supervisor
--export([start_link/3]).        % start the supervisor
--export([start_worker_pool/1]). % start its child (i.e., workers supervisor)
+-export([start_link/3]).
 
 %% workers supervisor
--export([start_link_worker/1]). % start the supervisor
--export([new_worker/2]).        % start its child (i.e., worker)
+-export([start_worker_pool/1]). % start workers supervisor)
+-export([new_worker/2]).        % start worker
 
 %% supervisor callbacks
 -export([init/1]).
@@ -30,10 +25,7 @@
 %% starting supervisor process
 
 start_link(CmdRecipient, Host, Port) ->
-  supervisor:start_link(?MODULE, [acceptor, CmdRecipient, Host, Port]).
-
-start_link_worker(CmdRecipient) ->
-  supervisor:start_link(?MODULE, [worker, CmdRecipient]).
+  supervisor:start_link(?MODULE, {CmdRecipient, Host, Port}).
 
 %%----------------------------------------------------------
 %% wrappers around `supervisor' module
@@ -47,40 +39,21 @@ start_worker_pool(Supervisor) ->
   {ok, Pid}.
 
 new_worker(Supervisor, ClientSocket) ->
-  strip_info(supervisor:start_child(Supervisor, [ClientSocket])).
-
-
-%% strip `Info' field from `{ok, Child, Info}' tuple, to always return
-%% `{ok, Child}' on success
-strip_info({ok, _Child} = Result) ->
-  Result;
-strip_info({ok, Child, _Info}) ->
-  {ok, Child};
-strip_info(Any) ->
-  Any.
+  indira_tcp_reader_sup:new_worker(Supervisor, ClientSocket).
 
 %%%---------------------------------------------------------------------------
 %%% supervisor callbacks
 %%%---------------------------------------------------------------------------
 
-init([acceptor, CmdRecipient, Host, Port] = _Args) ->
+init({CmdRecipient, Host, Port} = _Args) ->
   Strategy = {one_for_all, 5, 10},
   Children = [
     {indira_tcp_listener,
       {indira_tcp_listener, start_link, [self(), Host, Port]},
       permanent, 5000, worker, [indira_tcp_listener]},
     {indira_tcp_worker_pool_sup,
-      {?MODULE, start_link_worker, [CmdRecipient]},
-      permanent, 5000, supervisor, [?MODULE]}
-  ],
-  {ok, {Strategy, Children}};
-
-init([worker, CmdRecipient] = _Args) ->
-  Strategy = {simple_one_for_one, 5, 10},
-  Children = [
-    {undefined,
-      {indira_tcp_reader, start_link, [CmdRecipient]},
-      temporary, 5000, worker, [indira_tcp_reader]}
+      {indira_tcp_reader_sup, start_link, [CmdRecipient]},
+      permanent, 5000, supervisor, [indira_tcp_reader_sup]}
   ],
   {ok, {Strategy, Children}}.
 
