@@ -1,16 +1,16 @@
 %%%---------------------------------------------------------------------------
 %%%
-%%% Indira application (toplevel) supervisor.
+%%% Supervisor for listeners (see `indira_listener' module).
 %%%
 %%%---------------------------------------------------------------------------
 
--module(indira_sup).
+-module(indira_listener_sup).
 
 -behaviour(supervisor).
 
 %% public API
 -export([start_link/0]).
--export([start_listener_pool/1, start_listener/2]).
+-export([start_listener/2]).
 
 %% supervisor callbacks
 -export([init/1]).
@@ -24,33 +24,36 @@ start_link() ->
 
 %%%---------------------------------------------------------------------------
 
-%% {ok, Pid} | {error, Reason}
-start_listener_pool(Supervisor) ->
-  % FIXME: this is subject to a race condition with parent
-  % NOTE: this is somewhat ugly to manually search through the children, but
-  % I have little better alternatives on how this should work actually
-  Children = supervisor:which_children(Supervisor),
-  {_, Pid, _, _} = lists:keyfind(indira_listener_sup, 1, Children),
-  {ok, Pid}.
-
 %% add new listener child (worker or supervision tree) to existing supervisor
-start_listener(ListenerSupervisor, ListenerSpec) ->
-  indira_listener_sup:start_listener(ListenerSupervisor, ListenerSpec).
+start_listener(Supervisor, {{M,F,A}, ChildType} = _Spec) ->
+  Child = {
+    % I don't plan to manually stop/restart children anyway, and this function
+    % is supposed to be called in a single, short burst on supervisor with no
+    % children (just after spawning it), so non-uniqueness of refs is not
+    % a problem here
+    make_ref(),
+    {M, F, A},
+    permanent, 5000, ChildType, [M]
+  },
+  strip_info(supervisor:start_child(Supervisor, Child)).
+
+
+%% strip `Info' field from `{ok, Child, Info}' tuple, to always return
+%% `{ok, Child}' on success
+strip_info({ok, _Child} = Result) ->
+  Result;
+strip_info({ok, Child, _Info}) ->
+  {ok, Child};
+strip_info(Any) ->
+  Any.
 
 %%%---------------------------------------------------------------------------
 %%% supervisor callbacks
 %%%---------------------------------------------------------------------------
 
 init([]) ->
-  Strategy = {one_for_all, 5, 10},
-  Children = [
-    {indira_router,
-      {indira_router, start_link, [self()]},
-      permanent, 5000, worker, [indira_router]},
-    {indira_listener_sup,
-      {indira_listener_sup, start_link, []},
-      permanent, 5000, supervisor, [indira_listener_sup]}
-  ],
+  Strategy = {one_for_one, 5, 10},
+  Children = [],
   {ok, {Strategy, Children}}.
 
 %%%---------------------------------------------------------------------------
