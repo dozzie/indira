@@ -35,17 +35,16 @@ start_listener(Supervisor, {{M,F,A}, ChildType} = _Spec) ->
     {M, F, A},
     permanent, 5000, ChildType, [M]
   },
-  strip_info(supervisor:start_child(Supervisor, Child)).
-
-
-%% strip `Info' field from `{ok, Child, Info}' tuple, to always return
-%% `{ok, Child}' on success
-strip_info({ok, _Child} = Result) ->
-  Result;
-strip_info({ok, Child, _Info}) ->
-  {ok, Child};
-strip_info(Any) ->
-  Any.
+  % strip `Info' field from `{ok, Child, Info}' tuple, to always return
+  % `{ok, Child}' on success
+  case supervisor:start_child(Supervisor, Child) of
+    {ok, _Child} = Result ->
+      Result;
+    {ok, Child, _Info} ->
+      {ok, Child};
+    Error ->
+      Error
+  end.
 
 %%%---------------------------------------------------------------------------
 %%% supervisor callbacks
