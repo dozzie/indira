@@ -69,9 +69,9 @@ strip_info(Any) ->
 init(indira_root) ->
   Strategy = {one_for_all, 5, 10},
   Children = [
-    {indira,
-      {indira, start_link, [self()]},
-      permanent, 5000, worker, [indira]},
+    {indira_router,
+      {indira_router, start_link, [self()]},
+      permanent, 5000, worker, [indira_router]},
     {indira_listener,
       {?MODULE, start_link, [listener]},
       permanent, 5000, supervisor, [?MODULE]}
