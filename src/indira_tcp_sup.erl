@@ -66,9 +66,9 @@ strip_info(Any) ->
 init([acceptor, CmdRecipient, Host, Port] = _Args) ->
   Strategy = {one_for_all, 5, 10},
   Children = [
-    {indira_tcp,
-      {indira_tcp, start_link, [self(), Host, Port]},
-      permanent, 5000, worker, [indira_tcp]},
+    {indira_tcp_listener,
+      {indira_tcp_listener, start_link, [self(), Host, Port]},
+      permanent, 5000, worker, [indira_tcp_listener]},
     {indira_tcp_worker_pool_sup,
       {?MODULE, start_link_worker, [CmdRecipient]},
       permanent, 5000, supervisor, [?MODULE]}
@@ -79,8 +79,8 @@ init([worker, CmdRecipient] = _Args) ->
   Strategy = {simple_one_for_one, 5, 10},
   Children = [
     {undefined,
-      {indira_tcp, start_link_worker, [CmdRecipient]},
-      temporary, 5000, worker, [indira_tcp_client]}
+      {indira_tcp_reader, start_link, [CmdRecipient]},
+      temporary, 5000, worker, [indira_tcp_reader]}
   ],
   {ok, {Strategy, Children}}.
 
