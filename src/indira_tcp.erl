@@ -1,33 +1,31 @@
-%-----------------------------------------------------------------------------
-%
-% TCP listener.
-% TCP connection handler.
-%
-% NOTE: This module serves two purposes. It probably should be split to two
-% separate modules.
-%
-%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------
+%%%
+%%% TCP listener.
+%%% TCP connection handler.
+%%%
+%%% NOTE: This module serves two purposes. It probably should be split to two
+%%% separate modules.
+%%%
+%%%---------------------------------------------------------------------------
 
 -module(indira_tcp).
 
 -behaviour(indira_listener).
 -behaviour(gen_server).
 
-%-----------------------------------------------------------------------------
-
-% Indira listener API
+%% Indira listener API
 -export([supervision_child_spec/2]).
 
-% gen_server API
+%% gen_server API
 -export([init/1, terminate/2]).
 -export([handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3]).
 
-% public API for supervision tree
+%% public API for supervision tree
 -export([start_link/3]).
 -export([start_link_worker/2]).
 
-%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------
 
 -define(ACCEPT_TIMEOUT, 300). % somewhat arbitrary
 
@@ -38,43 +36,43 @@
 -define(INIT_OK    (State),  {ok, State, 0}).
 -define(CODE_CHANGE(State),  {ok, State}). % NOTE: timeout not applicable
 
-%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------
 
 -include_lib("kernel/include/inet.hrl").
 
 -record(listen, {socket, worker_pool_sup}).
 -record(client, {socket, command_recipient}).
 
-%-----------------------------------------------------------------------------
-% Indira listener API
-%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------
+%%% Indira listener API
+%%%---------------------------------------------------------------------------
 
 supervision_child_spec(CmdRecipient, {Host, Port} = _Args) ->
   MFA = {indira_tcp_sup, start_link, [CmdRecipient, Host, Port]},
   {MFA, supervisor}.
 
-% could also be:
-%   MFA = {?MODULE, start_link, [args, to, self]},
-%   {MFA, worker}.
+%% could also be:
+%%   MFA = {?MODULE, start_link, [args, to, self]},
+%%   {MFA, worker}.
 
-%-----------------------------------------------------------------------------
-% public API for supervision tree
-%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------
+%%% public API for supervision tree
+%%%---------------------------------------------------------------------------
 
-% spawn process that listens on TCP socket, accepts connections and spawns
-% reader workers
+%% spawn process that listens on TCP socket, accepts connections and spawns
+%% reader workers
 start_link(Supervisor, Host, Port) ->
   Args = [listener, Supervisor, Host, Port],
   gen_server:start_link(?MODULE, Args, []).
 
-% spawn process that reads everything from TCP socket
+%% spawn process that reads everything from TCP socket
 start_link_worker(CmdRecipient, ClientSocket) ->
   Args = [worker, CmdRecipient, ClientSocket],
   gen_server:start_link(?MODULE, Args, []).
 
-%-----------------------------------------------------------------------------
-% connection acceptor
-%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------
+%%% connection acceptor
+%%%---------------------------------------------------------------------------
 
 init([listener, Supervisor, Host, Port]) ->
   % create listening socket
@@ -97,8 +95,8 @@ init([worker, CmdRecipient, ClientSocket]) ->
   ?INIT_OK(State).
 
 
-% @private
-% retrieve workers pool, as promised in init(listener)
+%% @private
+%% retrieve workers pool, as promised in init(listener)
 start_worker_pool(Supervisor, State = #listen{worker_pool_sup = undefined}) ->
   {ok, WorkerPoolSup} =
     indira_tcp_sup:start_worker_pool(Supervisor),
@@ -155,7 +153,7 @@ handle_info(timeout, State = #listen{}) ->
       ?NORETURN(State)
   end;
 
-% ignore other messages
+%% ignore other messages
 handle_info(_Any, State = #listen{}) ->
   ?NORETURN(State);
 
@@ -170,11 +168,11 @@ handle_info({tcp, Socket, Line}, State = #client{socket = Socket}) ->
 handle_info(_Any, State = #client{}) ->
   ?NORETURN(State).
 
-%-----------------------------------------------------------------------------
-% network helpers
-%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------
+%%% network helpers
+%%%---------------------------------------------------------------------------
 
-% resolve DNS address to IP
+%% resolve DNS address to IP
 address_to_bind_option(any) ->
   [];
 address_to_bind_option(Addr) when is_list(Addr) ->
@@ -184,5 +182,5 @@ address_to_bind_option(Addr) when is_list(Addr) ->
 address_to_bind_option(Addr) when is_tuple(Addr) ->
   [{ip, Addr}].
 
-%-----------------------------------------------------------------------------
-% vim:ft=erlang:foldmethod=marker
+%%%---------------------------------------------------------------------------
+%%% vim:ft=erlang:foldmethod=marker

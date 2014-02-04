@@ -1,25 +1,25 @@
-%-----------------------------------------------------------------------------
-%
-% Indira, Mother of D(a)emons.
-% Helper application for running Erlang programs as unix daemons.
-%
-% Indira provides management protocol through TCP/SSL/UNIX/... sockets, which
-% helps in following (somewhat tedious) tasks:
-%   * check if the daemon finished its starting procedure
-%   * order the daemon to shut down
-%   * order the daemon to reload configuration (but how to reload, its up to
-%     daemon's author)
-%   * retrieve metrics/status info from daemon
-%   * other management commands
-%
-% Note that Indira IS NOT a module for loading data. It may be highly
-% inefficient. For management interface it shouldn't matter, though: commands
-% are typically a low-bandwidth traffic.
-%
-% This module is both an API for listeners and an implementation of protocol
-% parser + command forwarder.
-%
-%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------
+%%%
+%%% Indira, Mother of D(a)emons.
+%%% Helper application for running Erlang programs as unix daemons.
+%%%
+%%% Indira provides management protocol through TCP/SSL/UNIX/... sockets,
+%%% which helps in following (somewhat tedious) tasks:
+%%%   * check if the daemon finished its starting procedure
+%%%   * order the daemon to shut down
+%%%   * order the daemon to reload configuration (but how to reload, its up to
+%%%     daemon's author)
+%%%   * retrieve metrics/status info from daemon
+%%%   * other management commands
+%%%
+%%% Note that Indira IS NOT a module for loading data. It may be highly
+%%% inefficient. For management interface it shouldn't matter, though:
+%%% commands are typically a low-bandwidth traffic.
+%%%
+%%% This module is both an API for listeners and an implementation of protocol
+%%% parser + command forwarder.
+%%%
+%%%---------------------------------------------------------------------------
 
 -module(indira).
 
@@ -27,43 +27,43 @@
 
 -export([command/2]).
 
-% public API for supervision tree
+%% public API for supervision tree
 -export([start_link/1]).
 -export([start/0]).
 
-% gen_server API
+%% gen_server API
 -export([init/1, terminate/2, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3]).
 
-%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------
 
 -include_lib("kernel/include/inet.hrl").
 
 -record(state, {}).
 
-%-----------------------------------------------------------------------------
-% public API
-%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------
+%%% public API
+%%%---------------------------------------------------------------------------
 
-% send command to Indira process
+%% send command to Indira process
 command(Indira, Line) ->
   gen_server:call(Indira, {command, Line}).
 
-%-----------------------------------------------------------------------------
-% public API for supervision tree
-%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------
+%%% API for supervision tree
+%%%---------------------------------------------------------------------------
 
 start_link(Parent) ->
   % TODO: don't require registering new process
   gen_server:start_link({local, ?MODULE}, ?MODULE, Parent, []).
 
-% convenience wrapper
+%% convenience wrapper
 start() ->
   application:start(indira, transient).
 
-%-----------------------------------------------------------------------------
-% gen_server API
-%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------
+%%% gen_server callbacks
+%%%---------------------------------------------------------------------------
 
 init(Parent) ->
   % I can't call parent until this function finishes; I'll add a message to
@@ -127,5 +127,5 @@ code_change(_OldVsn, State, _Extra) ->
   io:fwrite("[indira] code change~n"),
   {ok, State}.
 
-%-----------------------------------------------------------------------------
-% vim:ft=erlang:foldmethod=marker
+%%%---------------------------------------------------------------------------
+%%% vim:ft=erlang:foldmethod=marker

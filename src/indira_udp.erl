@@ -1,53 +1,53 @@
-%-----------------------------------------------------------------------------
-%
-% UDP listener.
-%
-%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------
+%%%
+%%% UDP listener.
+%%%
+%%%---------------------------------------------------------------------------
 
 -module(indira_udp).
 
 -behaviour(indira_listener).
 -behaviour(gen_server).
 
-%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------
 
-% Indira listener API
+%% Indira listener API
 -export([supervision_child_spec/2]).
 
-% gen_server API
+%% gen_server callbacks
 -export([init/1, terminate/2]).
 -export([handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3]).
 
-% public API for supervision tree
+%% API for supervision tree
 -export([start_link/3]).
 
-%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------
 
 -include_lib("kernel/include/inet.hrl").
 
 -record(state, {socket, command_recipient}).
 
-%-----------------------------------------------------------------------------
-% Indira listener API
-%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------
+%%% Indira listener API
+%%%---------------------------------------------------------------------------
 
 supervision_child_spec(CmdRecipient, {Host, Port} = _Args) ->
-  MFA = {indira_udp, start_link, [CmdRecipient, Host, Port]},
+  MFA = {?MODULE, start_link, [CmdRecipient, Host, Port]},
   {MFA, worker}.
 
-%-----------------------------------------------------------------------------
-% public API for supervision tree
-%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------
+%%% public API for supervision tree
+%%%---------------------------------------------------------------------------
 
-% spawn process that listens on UDP socket
+%% spawn process that listens on UDP socket
 start_link(CmdRecipient, Host, Port) ->
   Args = [CmdRecipient, Host, Port],
   gen_server:start_link(?MODULE, Args, []).
 
-%-----------------------------------------------------------------------------
-% connection acceptor
-%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------
+%%% connection acceptor
+%%%---------------------------------------------------------------------------
 
 init([CmdRecipient, Host, Port]) ->
   % create listening socket
@@ -88,11 +88,11 @@ handle_info(_Any, State = #state{}) ->
   {noreply, State}. % ignore other messages
 
 
-%-----------------------------------------------------------------------------
-% network helpers
-%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------
+%%% network helpers
+%%%---------------------------------------------------------------------------
 
-% resolve DNS address to IP
+%% resolve DNS address to IP
 address_to_bind_option(any) ->
   [];
 address_to_bind_option(Addr) when is_list(Addr) ->
@@ -102,5 +102,5 @@ address_to_bind_option(Addr) when is_list(Addr) ->
 address_to_bind_option(Addr) when is_tuple(Addr) ->
   [{ip, Addr}].
 
-%-----------------------------------------------------------------------------
-% vim:ft=erlang:foldmethod=marker
+%%%---------------------------------------------------------------------------
+%%% vim:ft=erlang:foldmethod=marker

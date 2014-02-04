@@ -1,39 +1,33 @@
-%-----------------------------------------------------------------------------
-%
-% Indira TCP listener supervisor.
-% TCP workers supervisor (worker pool).
-%
-% NOTE: Yes, this module serves two purposes, depending on call options.
-%
-%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------
+%%%
+%%% Indira TCP listener supervisor.
+%%% TCP workers supervisor (worker pool).
+%%%
+%%% NOTE: Yes, this module serves two purposes, depending on call options.
+%%%
+%%%---------------------------------------------------------------------------
 
 -module(indira_tcp_sup).
 
 -behaviour(supervisor).
 
-%-----------------------------------------------------------
-% public API
+%% acceptors supervisor
+-export([start_link/3]).        % start the supervisor
+-export([start_worker_pool/1]). % start its child (i.e., workers supervisor)
 
-% starting this supervisor
--export([start_link/3]).
-% starting this supervisor as a workers pool (internal function)
--export([start_link_worker/1]).
-% supervisor that acts as a workers pool (starting supervisor and its worker)
--export([start_worker_pool/1, new_worker/2]).
+%% workers supervisor
+-export([start_link_worker/1]). % start the supervisor
+-export([new_worker/2]).        % start its child (i.e., worker)
 
-%-----------------------------------------------------------
-% supervisor callbacks
-
+%% supervisor callbacks
 -export([init/1]).
 
-%-----------------------------------------------------------
+%%%---------------------------------------------------------------------------
+%%% public API
+%%%---------------------------------------------------------------------------
 
-%-----------------------------------------------------------------------------
-% public API
-%-----------------------------------------------------------------------------
-
-%-----------------------------------------------------------
-% starting supervisor process
+%%----------------------------------------------------------
+%% starting supervisor process
 
 start_link(CmdRecipient, Host, Port) ->
   supervisor:start_link(?MODULE, [acceptor, CmdRecipient, Host, Port]).
@@ -41,8 +35,8 @@ start_link(CmdRecipient, Host, Port) ->
 start_link_worker(CmdRecipient) ->
   supervisor:start_link(?MODULE, [worker, CmdRecipient]).
 
-%-----------------------------------------------------------
-% wrappers around `supervisor' module
+%%----------------------------------------------------------
+%% wrappers around `supervisor' module
 
 start_worker_pool(Supervisor) ->
   % FIXME: this is subject to a race condition with parent
@@ -56,8 +50,8 @@ new_worker(Supervisor, ClientSocket) ->
   strip_info(supervisor:start_child(Supervisor, [ClientSocket])).
 
 
-% strip `Info' field from `{ok, Child, Info}' tuple, to always return
-% `{ok, Child}' on success
+%% strip `Info' field from `{ok, Child, Info}' tuple, to always return
+%% `{ok, Child}' on success
 strip_info({ok, _Child} = Result) ->
   Result;
 strip_info({ok, Child, _Info}) ->
@@ -65,9 +59,9 @@ strip_info({ok, Child, _Info}) ->
 strip_info(Any) ->
   Any.
 
-%-----------------------------------------------------------------------------
-% supervisor callbacks
-%-----------------------------------------------------------------------------
+%%%---------------------------------------------------------------------------
+%%% supervisor callbacks
+%%%---------------------------------------------------------------------------
 
 init([acceptor, CmdRecipient, Host, Port] = _Args) ->
   Strategy = {one_for_all, 5, 10},
@@ -90,5 +84,5 @@ init([worker, CmdRecipient] = _Args) ->
   ],
   {ok, {Strategy, Children}}.
 
-%-----------------------------------------------------------------------------
-% vim:ft=erlang:foldmethod=marker
+%%%---------------------------------------------------------------------------
+%%% vim:ft=erlang:foldmethod=marker
