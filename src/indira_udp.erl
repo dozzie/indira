@@ -6,7 +6,7 @@
 
 -module(indira_udp).
 
--behaviour(indira_listener).
+-behaviour(gen_indira_listener).
 -behaviour(gen_server).
 
 %%%---------------------------------------------------------------------------

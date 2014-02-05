@@ -27,7 +27,7 @@
 %%% @end
 %%%---------------------------------------------------------------------------
 
--module(indira_listener).
+-module(gen_indira_listener).
 
 -export([behaviour_info/1]).
 

@@ -40,7 +40,7 @@ start_listener_pool(Supervisor) ->
 
 %% @doc Start new listener child.
 %%   The child can be a worker or a supervisor, according to
-%%   {@link indira_listener}.
+%%   {@link gen_indira_listener}.
 start_listener(ListenerSupervisor, ListenerSpec) ->
   indira_listener_sup:start_listener(ListenerSupervisor, ListenerSpec).
 

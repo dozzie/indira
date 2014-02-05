@@ -6,7 +6,7 @@
 
 -module(indira_tcp).
 
--behaviour(indira_listener).
+-behaviour(gen_indira_listener).
 
 %% Indira listener API
 -export([supervision_child_spec/2]).
