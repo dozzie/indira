@@ -22,7 +22,7 @@
 
 -define(ACCEPT_TIMEOUT, 300). % somewhat arbitrary
 
--define(NORETURN       (State),            {noreply,             State, 0}).
+-define(NORETURN   (State),                {noreply,             State, 0}).
 -define(STOP_RETURN(Reason, Reply, State), {stop, Reason, Reply, State}).
 -define(INIT_OK    (State),  {ok, State, 0}).
 -define(CODE_CHANGE(State),  {ok, State}). % NOTE: timeout not applicable
@@ -57,11 +57,14 @@ init({Supervisor, Host, Port} = _Args) ->
   % first thing to do after this call is finished, the workers pool must be
   % retrieved
   % NOTE: There's no race condition between gen_tcp:accept() and
-  % ?MODULE:handle_info(), because the connection 
+  % ?MODULE:handle_info(), because the listening TCP connections don't
+  % generate messages
   self() ! {start_worker_pool, Supervisor},
 
   State = #state{socket = Socket, worker_pool_sup = undefined},
-  ?INIT_OK(State).
+  % no timeout needed: I already sent a message to `self()', which will be
+  % processed immediately and after processing timeout would be set
+  {ok, State}.
 
 %% @doc Clean up {@link gen_server} state.
 %%   This includes closing the listening socket.
