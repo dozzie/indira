@@ -1,9 +1,11 @@
 {application, indira, [
   {description, ""},
-  {vsn, "1"},
+  {vsn, "0.0.1"},
   {registered, []},
   {applications, [kernel, stdlib]},
   {mod, {indira_app, []}},
   {env, [
+    {listen, []},
+    {commander, undefined}
   ]}
 ]}.
