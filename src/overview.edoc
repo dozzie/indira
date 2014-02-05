@@ -22,8 +22,48 @@ Note that Indira <b>is not</b> a module for loading data. It may be highly
 inefficient. For management interface it shouldn't matter, though:
 commands are typically a low-bandwidth traffic.
 
+The application is named after Indira Toledo, a character of an excellent S-F
+novel titled <i>Mother of Demons</i> by Eric Flint.
+
+== Usage ==
+
+=== Basic usage ===
+
+Main idea behind using Indira is to have all the daemon's code written as
+Erlang application: spawning processes in supervision tree, specifying
+dependencies like `ssl' or `ssh' or `inets' applications, reading
+configuration with {@link application:get_env/2} and so on. Daemonized
+application doesn't need to (and probably shouldn't) know about Indira at all.
+It also shouldn't attempt to interact with operating system about
+daemonization, like reading command line arguments, configuration files or
+writing PID files.
+
+Indira shows up in {@link examples_escript. command line script} (run by
+`escript'), which is used to preconfigure application's environment, start
+required applications and do other tasks required to run a daemon. Indira only
+relies on {@link application} interface and on parameters provided by command
+line script.
+
+=== Command subsystem ===
+
+There is an additional, optional -- although highly recommended -- subsystem
+of issuing commands to the daemonized application. From the application it
+requires a {@link examples_command_executor. command executor} process, which
+receives messages of specific structure and replies to them with other
+messages (see {@link indira} module for protocol details). Still, an
+application doesn't need to know about Indira.
+
+Indira on its part will start several so called
+{@link gen_indira_listener. listeners}, which receive commands from user. The
+commands will be passed to command executor and replies will be passed back to
+the user. List of listeners to start is specified in application
+configuration (see {@link examples_app_config} for some examples).
+
+== Where to start reading documentation ==
+
 Indira users typically want to study {@link indira} module as their main
 interface (including protocol used to execute commands coming from listeners).
+
 Programmers writing listener modules will additionally need to read
 documentation of {@link gen_indira_listener} module, which also specifies
 communication protocol between Indira and listeners.

@@ -34,10 +34,10 @@
 %%%
 %%%   == Entry point module API ==
 %%%
-%%%   `Module:supervision_child_spec/2' gets two arguments: Indira handle
-%%%   (suitable for {@link indira:command/2}) and the term that was specified
-%%%   as module argument in environment specification. Now, `Module' has an
-%%%   opportunity to pass Indira handle to the child to be spawned.
+%%%   `Module:supervision_child_spec/2' gets two arguments: Indira router
+%%%   address suitable for {@link indira:command/2} and the term that was
+%%%   specified as module argument in environment specification. Now, `Module'
+%%%   has an opportunity to pass Indira handle to the child to be spawned.
 %%%
 %%%   `Module:supervision_child_spec/2' is supposed to return `{MFA, Type}',
 %%%   where `Type' is `worker' or `supervisor' and `MFA' is `{Module,
