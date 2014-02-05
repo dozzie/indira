@@ -27,7 +27,7 @@
 -export([distributed/3]).
 
 %% API for listeners
--export([command/2]).
+-export([command/2, command/3]).
 
 %%%---------------------------------------------------------------------------
 %%% API for escript
@@ -188,8 +188,26 @@ distributed(Name, NameType, Cookie) ->
 %%%---------------------------------------------------------------------------
 
 %% @doc Send command to Indira router.
+%%   Response to the command will be passed as a message to the caller of this
+%%   function.
+%%
+%% @see indira_router:command/2
 command(Indira, Line) ->
-  gen_server:call(Indira, {command, Line}).
+  indira_router:command(Indira, Line).
+
+%% @doc Send command to Indira router.
+%%   Response to the command will be passed as a message to the caller of this
+%%   function.
+%%
+%%   `RoutingKey' is an additional information to tell apart between multiple
+%%   clients and will be included in command reply message.
+%%
+%%   This call form is only needed when a single process handles multiple
+%%   clients.
+%%
+%% @see indira_router:command/3
+command(Indira, RoutingKey, Line) ->
+  indira_router:command(Indira, RoutingKey, Line).
 
 %%%---------------------------------------------------------------------------
 %%% vim:ft=erlang:foldmethod=marker

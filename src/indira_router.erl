@@ -15,6 +15,9 @@
 -export([init/1, terminate/2, handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3]).
 
+%% command routing API
+-export([command/2, command/3]).
+
 %%%---------------------------------------------------------------------------
 
 -record(state, {}).
@@ -100,6 +103,28 @@ code_change(_OldVsn, State, _Extra) ->
   % TODO: error_logger:info_report()
   io:fwrite("[indira router] code change~n"),
   {ok, State}.
+
+%%%---------------------------------------------------------------------------
+%%% command routing API
+%%%---------------------------------------------------------------------------
+
+%% @doc Send command to Indira router.
+%%   Response to the command will be passed as a message to the caller of this
+%%   function.
+command(Indira, Line) ->
+  gen_server:call(Indira, {command, self(), Line}).
+
+%% @doc Send command to Indira router.
+%%   Response to the command will be passed as a message to the caller of this
+%%   function.
+%%
+%%   `RoutingKey' is an additional information to tell apart between multiple
+%%   clients and will be included in command reply message.
+%%
+%%   This call form is only needed when a single process handles multiple
+%%   clients.
+command(Indira, RoutingKey, Line) ->
+  gen_server:call(Indira, {command, {self(), RoutingKey}, Line}).
 
 %%%---------------------------------------------------------------------------
 %%% vim:ft=erlang:foldmethod=marker
