@@ -1,16 +1,21 @@
 %%%---------------------------------------------------------------------------
 %%% @doc
-%%%   Indira listener (TCP, SSL, UNIX, you name it) descriptor behaviour.
+%%%   Indira listener (TCP, SSL, UNIX, you name it) entry point.
 %%%
 %%%   Module implementing this behaviour is an entry point for Indira to spawn
 %%%   a listener, either directly a worker (e.g. for connection-less
 %%%   protocols) or a supervision subtree (e.g. for TCP).
 %%%
+%%%   Note that it will be a good idea to describe what's expected as
+%%%   the parameter in listener definition in Indira's config (the config
+%%%   retrieved with `application:get_env(indira, listen)').
+%%%
 %%%   == Module API ==
 %%%
 %%%   `Module:supervision_child_spec/2' gets two arguments: Indira handle
 %%%   (suitable for {@link indira:command/2}) and term that specified as
-%%%   module argument in environment specification.
+%%%   module argument in environment specification. Now, `Module' has an
+%%%   opportunity to pass Indira handle to the child to be spawned.
 %%%
 %%%   `Module:supervision_child_spec/2' is supposed to return `{MFA, Type}',
 %%%   where `Type' is `worker' or `supervisor' and `MFA' is `{Module,

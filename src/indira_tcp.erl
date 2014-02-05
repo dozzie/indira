@@ -1,6 +1,17 @@
 %%%---------------------------------------------------------------------------
 %%% @doc
 %%%   TCP listener entry point.
+%%%
+%%%   == Indira parameter ==
+%%%
+%%%   This module expects a tuple `{Host,Port}' as a parameter (see
+%%%   {@link indira}). The `Host' part can be:
+%%%   <ul>
+%%%     <li>`string()'</li>
+%%%     <li>`inet:ip_address()' (i.e. `{N1,N2,N3,N4}' for IPv4)</li>
+%%%     <li>`` 'any' '' to indicate no binding to any particular interface</li>
+%%%   </ul>
+%%%
 %%% @end
 %%%---------------------------------------------------------------------------
 

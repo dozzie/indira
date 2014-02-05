@@ -1,6 +1,14 @@
 %%%---------------------------------------------------------------------------
 %%% @doc
 %%%   Indira main API.
+%%%
+%%% @TODO Describe how does environment config ({@link application:get_env/2})
+%%%   look like (`application:get_env(indira, listen)' is a list of tuples
+%%%   `{Module, ListenerArg}').
+%%%
+%%% @see indira_tcp
+%%% @see indira_udp
+%%%
 %%% @end
 %%%---------------------------------------------------------------------------
 
