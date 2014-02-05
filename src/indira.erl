@@ -5,6 +5,7 @@
 %%% @TODO Describe how does environment config ({@link application:get_env/2})
 %%%   look like (`application:get_env(indira, listen)' is a list of tuples
 %%%   `{Module, ListenerArg}').
+%%% @TODO Describe communication protocol between Indira and command executor.
 %%%
 %%% @see indira_tcp
 %%% @see indira_udp

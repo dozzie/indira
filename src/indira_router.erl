@@ -1,6 +1,8 @@
 %%%---------------------------------------------------------------------------
 %%% @doc
 %%%   Indira message (command and reply) router.
+%%%
+%%% @see gen_indira_listener
 %%% @end
 %%%---------------------------------------------------------------------------
 
@@ -20,7 +22,7 @@
 
 %%%---------------------------------------------------------------------------
 
--record(state, {}).
+-record(state, {commander}).
 
 %%%---------------------------------------------------------------------------
 %%% API for supervision tree
@@ -28,20 +30,26 @@
 
 %% @doc Start router process.
 start_link(Parent) ->
-  % TODO: don't require registering new process
-  gen_server:start_link({local, ?MODULE}, ?MODULE, Parent, []).
+  case application:get_env(indira, commander) of
+    {ok, Cmder} ->
+      % TODO: don't require registering new process
+      gen_server:start_link({local, ?MODULE}, ?MODULE, {Parent, Cmder}, []);
+    undefined ->
+      % TODO: or allow start and then reconfiguration?
+      {error, no_commander}
+  end.
 
 %%%---------------------------------------------------------------------------
 %%% gen_server callbacks
 %%%---------------------------------------------------------------------------
 
 %% @doc Initialize {@link gen_server} state.
-init(Parent) ->
+init({Parent, Commander} = _Args) ->
   % I can't call parent until this function finishes; I'll add a message to
   % process' mailbox for handling later (just calling `spawn_listeners/2')
   self() ! {spawn_listeners, Parent},
 
-  State = #state{},
+  State = #state{commander = Commander},
   {ok, State}.
 
 %% spawn_listeners(Parent, State) -> {ok, NewState} {{{
@@ -68,19 +76,21 @@ terminate(_Reason, _State) ->
   ok.
 
 %% @doc Handle {@link gen_server:call/2}.
-handle_call(Request, _From, State) ->
-  case Request of
-    {command, Command} ->
-      % TODO: error_logger:info_report()
-      io:fwrite("[indira router] got command: ~p~n", [Command]),
-      {reply, ok, State};
-    stop ->
-      {stop, normal, ok, State};
-    _Any ->
-      % TODO: error_logger:info_report()
-      io:fwrite("[indira router] call: WTF? ~p~n", [_Any]),
-      {reply, ok, State}
-  end.
+handle_call({command, ReplyTo, Line} = _Request, _From, State) ->
+  % TODO: make this a message instead of call (result is a message anyway)
+  % TODO: parse `Line'
+  State#state.commander ! {command, self(), ReplyTo, Line},
+  io:fwrite("[indira router] got command: ~200p -> ~200p -> ~200p~n",
+            [ReplyTo, Line, State#state.commander]),
+  {reply, ok, State};
+
+handle_call(stop = _Request, _From, State) ->
+  {stop, normal, ok, State};
+
+handle_call(_Request, _From, State) ->
+  % TODO: error_logger:info_report()
+  io:fwrite("[indira router] call: WTF? ~p~n", [_Request]),
+  {reply, ok, State}.
 
 %% @doc Handle {@link gen_server:cast/2}.
 handle_cast(_Request, State) ->
@@ -93,6 +103,18 @@ handle_info({spawn_listeners, Parent}, State) ->
   % adding listeners supervision tree, as promised in `init/1'
   {ok, NewState} = spawn_listeners(Parent, State),
   {noreply, NewState};
+
+handle_info({result, ReplyTo, Value} = _Request, State) ->
+  % send result back to listener
+  io:fwrite("[indira router] got command result: ~200p -> ~200p~n",
+            [Value, ReplyTo]),
+  % TODO: serialize `Value'
+  case ReplyTo of
+    {Pid, Hint} -> Pid ! {result, Hint, Value};
+    _Pid -> ReplyTo ! {result, Value}
+  end,
+  {noreply, State};
+
 handle_info(_Message, State) ->
   % TODO: error_logger:info_report()
   io:fwrite("[indira router] message: WTF? ~p~n", [_Message]),

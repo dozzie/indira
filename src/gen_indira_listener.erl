@@ -10,11 +10,33 @@
 %%%   the parameter in listener definition in Indira's config (the config
 %%%   retrieved with `application:get_env(indira, listen)').
 %%%
-%%%   == Module API ==
+%%%   == Communication command executor ==
+%%%
+%%%   Command executor is a separate process with `gen_server' behaviour.
+%%%   Messages sent to and expected from are documented in {@link indira}
+%%%   module, as it's mostly seen by Indira's user (daemon author).
+%%%
+%%%   == Communication with listener ==
+%%%
+%%%   Listener is expected to read a single line of the request from client
+%%%   and send it using {@link indira:command/2} or {@link indira:command/3}
+%%%   to Indira router. Indira router will parse it and send it further to
+%%%   command center. Reply to the command will come as a message of form
+%%%   `{result,Line}' (when {@link indira:command/2} was called) or
+%%%   `{result,RoutingHint,Line}' ({@link indira:command/3}). You may depend
+%%%   on this behaviour. `Line' <em>will not</em> include newline character in
+%%%   any form.
+%%%
+%%%   {@link indira:command/3} with `{result,RoutingHint,Line}' message are
+%%%   intended for cases when single listener handles multiple clients and
+%%%   needs to distinguish them. Listener may specify anything as
+%%%   a `RoutingHint' -- it's opaque to Indira router.
+%%%
+%%%   == Entry point module API ==
 %%%
 %%%   `Module:supervision_child_spec/2' gets two arguments: Indira handle
-%%%   (suitable for {@link indira:command/2}) and term that specified as
-%%%   module argument in environment specification. Now, `Module' has an
+%%%   (suitable for {@link indira:command/2}) and the term that was specified
+%%%   as module argument in environment specification. Now, `Module' has an
 %%%   opportunity to pass Indira handle to the child to be spawned.
 %%%
 %%%   `Module:supervision_child_spec/2' is supposed to return `{MFA, Type}',
@@ -29,6 +51,7 @@
 %%%     <li>`{{foo_sup, start_link, []}, supervisor}' for
 %%%         `foo_sup:start_link/0' that runs whole supervision tree</li>
 %%%   </ul>
+%%%
 %%% @end
 %%%---------------------------------------------------------------------------
 

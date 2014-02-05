@@ -33,7 +33,7 @@ start_link(CmdRouter, ClientSocket) ->
 %%%---------------------------------------------------------------------------
 
 %% @doc Initialize {@link gen_server} state.
-init({CmdRouter, ClientSocket}) ->
+init({CmdRouter, ClientSocket} = _Args) ->
   State = #state{socket = ClientSocket, command_router = CmdRouter},
   {ok, State}.
 
@@ -47,7 +47,7 @@ code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
 %% @doc Handle {@link gen_server:call/2}.
-handle_call(stop, _From, State) ->
+handle_call(stop = _Request, _From, State) ->
   {stop, normal, ok, State};
 handle_call(_Request, _From, State) ->
   {noreply, State}. % ignore unknown calls
@@ -57,15 +57,19 @@ handle_cast(_Request, State) ->
   {noreply, State}. % ignore unknown calls
 
 %% @doc Handle incoming messages (TCP data and commands).
-handle_info({tcp_closed, Socket}, State = #state{socket = Socket}) ->
+handle_info({tcp_closed, Socket} = _Msg, State = #state{socket = Socket}) ->
   gen_tcp:close(Socket),
   {stop, normal, State};
 
-handle_info({tcp, Socket, Line}, State = #state{socket = Socket}) ->
+handle_info({tcp, Socket, Line} = _Msg, State = #state{socket = Socket}) ->
   indira:command(State#state.command_router, Line),
   {noreply, State};
 
-handle_info(_Any, State = #state{}) ->
+handle_info({result, Line} = _Msg, State = #state{socket = Socket}) ->
+  gen_tcp:send(Socket, [Line, "\n"]),
+  {noreply, State};
+
+handle_info(_Msg, State = #state{}) ->
   {noreply, State}.
 
 %%%---------------------------------------------------------------------------

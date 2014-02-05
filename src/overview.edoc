@@ -1,5 +1,7 @@
 @author Stanislaw Klekot <dozzie@jarowit.net>
 @title Indira, Mother of D(a)emons.
+@see indira
+@see gen_indira_listener
 @doc
 
 Helper application for running Erlang programs as unix daemons.
@@ -19,3 +21,9 @@ which helps in following (somewhat tedious) tasks:
 Note that Indira <b>is not</b> a module for loading data. It may be highly
 inefficient. For management interface it shouldn't matter, though:
 commands are typically a low-bandwidth traffic.
+
+Indira users typically want to study {@link indira} module as their main
+interface (including protocol used to execute commands coming from listeners).
+Programmers writing listener modules will additionally need to read
+documentation of {@link gen_indira_listener} module, which also specifies
+communication protocol between Indira and listeners.

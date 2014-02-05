@@ -84,7 +84,7 @@ code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
 %% @doc Handle {@link gen_server:call/2}.
-handle_call(stop, _From, State) ->
+handle_call(stop = _Request, _From, State) ->
   {stop, normal, ok, State};
 handle_call(_Request, _From, State) ->
   {noreply, State}. % ignore unknown calls
@@ -94,12 +94,19 @@ handle_cast(_Request, State) ->
   {noreply, State}. % ignore unknown casts
 
 %% @doc Handle incoming messages (UDP data and commands).
-handle_info({udp, Socket, _IP, _Port, Data}, State = #state{socket = Socket}) ->
+handle_info({udp, Socket, IP, Port, Data} = _Msg,
+            State = #state{socket = Socket}) ->
   #state{command_router = CmdRouter} = State,
-  indira:command(CmdRouter, "[udp] " ++ Data),
+  RoutingHint = {IP, Port},
+  indira:command(CmdRouter, RoutingHint, "[udp] " ++ Data),
   {noreply, State};
 
-handle_info(_Any, State = #state{}) ->
+handle_info({result, {IP, Port} = _RoutingHint, Line} = _Msg,
+            State = #state{socket = Socket}) ->
+  gen_udp:send(Socket, IP, Port, [Line, "\n"]),
+  {noreply, State};
+
+handle_info(_Msg, State = #state{}) ->
   {noreply, State}. % ignore other messages
 
 
