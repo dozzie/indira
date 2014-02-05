@@ -27,7 +27,7 @@ start_link() ->
 
 %% @doc Start new listener child under the supervisor.
 start_listener(Supervisor, {{M,F,A}, ChildType} = _Spec) ->
-  Child = {
+  ChildSpec = {
     % I don't plan to manually stop/restart children anyway, and this function
     % is supposed to be called in a single, short burst on supervisor with no
     % children (just after spawning it), so non-uniqueness of refs is not
@@ -38,7 +38,7 @@ start_listener(Supervisor, {{M,F,A}, ChildType} = _Spec) ->
   },
   % strip `Info' field from `{ok, Child, Info}' tuple, to always return
   % `{ok, Child}' on success
-  case supervisor:start_child(Supervisor, Child) of
+  case supervisor:start_child(Supervisor, ChildSpec) of
     {ok, _Child} = Result ->
       Result;
     {ok, Child, _Info} ->
