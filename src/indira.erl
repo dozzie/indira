@@ -12,6 +12,7 @@
 -export([start_rec/1, start_rec/2]).
 -export([load_plugins_dir/1]).
 -export([write_pidfile/1]).
+-export([chdir/0, chdir/1]).
 -export([setup_logging/1]).
 -export([distributed/1]).
 -export([distributed/2]).
@@ -105,7 +106,7 @@ load_plugins_dir(Directory) ->
     Directory, "\\.beam$", false,
     fun(F, Acc) ->
       AF = filename:absname(F),
-      CF = string:substr(AF, 1, length(AF) - 5),
+      CF = filename:rootname(AF),
       {module, Mod} = code:load_abs(CF),
       [{Mod, AF} | Acc]
     end, []
@@ -121,6 +122,18 @@ write_pidfile(undefined) ->
   ok;
 write_pidfile(_Filename) ->
   'TODO'.
+
+%% }}}
+%%----------------------------------------------------------
+%% `cd /' {{{
+
+%% @doc Change directory to <tt>/</tt>.
+chdir() ->
+  ok = file:set_cwd("/").
+
+%% @doc Change directory.
+chdir(Directory) ->
+  ok = file:set_cwd(Directory).
 
 %% }}}
 %%----------------------------------------------------------
