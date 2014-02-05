@@ -62,11 +62,11 @@ sleep_forever() ->
 %% @doc Start application along with all its dependencies.
 %%   This function is intended for being run from `escript' code.
 %%
-%%   <b>NOTE</b>: Application start type is `temporary'.
+%%   <b>NOTE</b>: Application start type is `permanent'.
 %% @see application:start/2
 start_rec(App) ->
   % defaults to the same as application:start()
-  start_rec(App, temporary).
+  start_rec(App, permanent).
 
 %% @doc Start application along with all its dependencies.
 %%   This function is intended for being run from `escript' code.
