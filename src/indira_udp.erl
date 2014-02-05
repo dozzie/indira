@@ -26,15 +26,15 @@
 
 -include_lib("kernel/include/inet.hrl").
 
--record(state, {socket, command_recipient}).
+-record(state, {socket, command_router}).
 
 %%%---------------------------------------------------------------------------
 %%% Indira listener API
 %%%---------------------------------------------------------------------------
 
 %% @doc Listener description.
-supervision_child_spec(CmdRecipient, {Host, Port} = _Args) ->
-  MFA = {?MODULE, start_link, [CmdRecipient, Host, Port]},
+supervision_child_spec(CmdRouter, {Host, Port} = _Args) ->
+  MFA = {?MODULE, start_link, [CmdRouter, Host, Port]},
   {MFA, worker}.
 
 %%%---------------------------------------------------------------------------
@@ -42,8 +42,8 @@ supervision_child_spec(CmdRecipient, {Host, Port} = _Args) ->
 %%%---------------------------------------------------------------------------
 
 %% @doc Start UDP listener process.
-start_link(CmdRecipient, Host, Port) ->
-  Args = [CmdRecipient, Host, Port],
+start_link(CmdRouter, Host, Port) ->
+  Args = {CmdRouter, Host, Port},
   gen_server:start_link(?MODULE, Args, []).
 
 %%%---------------------------------------------------------------------------
@@ -52,14 +52,14 @@ start_link(CmdRecipient, Host, Port) ->
 
 %% @doc Initialize {@link gen_server} state.
 %%   This includes creating listening UDP socket.
-init([CmdRecipient, Host, Port] = _Args) ->
+init({CmdRouter, Host, Port} = _Args) ->
   % create listening socket
   BindOpt = address_to_bind_option(Host),
   {ok, Socket} = gen_udp:open(Port, BindOpt ++ [
     {active, true}, {reuseaddr, true}, list
   ]),
 
-  State = #state{socket = Socket, command_recipient = CmdRecipient},
+  State = #state{socket = Socket, command_router = CmdRouter},
   {ok, State}.
 
 %% @doc Clean up {@link gen_server} state.
@@ -84,8 +84,8 @@ handle_cast(_Request, State) ->
 
 %% @doc Handle incoming messages (UDP data and commands).
 handle_info({udp, Socket, _IP, _Port, Data}, State = #state{socket = Socket}) ->
-  #state{command_recipient = CmdRecipient} = State,
-  indira:command(CmdRecipient, "[udp] " ++ Data),
+  #state{command_router = CmdRouter} = State,
+  indira:command(CmdRouter, "[udp] " ++ Data),
   {noreply, State};
 
 handle_info(_Any, State = #state{}) ->

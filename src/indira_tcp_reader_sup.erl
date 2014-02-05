@@ -9,7 +9,7 @@
 -behaviour(supervisor).
 
 -export([start_link/1]).
--export([new_worker/2]).
+-export([start_worker/2]).
 
 %% supervisor callbacks
 -export([init/1]).
@@ -22,11 +22,11 @@
 %% starting supervisor process
 
 %% @doc Start the supervisor process.
-start_link(CmdRecipient) ->
-  supervisor:start_link(?MODULE, CmdRecipient).
+start_link(CmdRouter) ->
+  supervisor:start_link(?MODULE, CmdRouter).
 
 %% @doc Start new worker child for a socket.
-new_worker(Supervisor, ClientSocket) ->
+start_worker(Supervisor, ClientSocket) ->
   % strip `Info' field from `{ok, Child, Info}' tuple, to always return
   % `{ok, Child}' on success
   case supervisor:start_child(Supervisor, [ClientSocket]) of
@@ -43,11 +43,11 @@ new_worker(Supervisor, ClientSocket) ->
 %%%---------------------------------------------------------------------------
 
 %% @doc Initialize supervisor.
-init(CmdRecipient) ->
+init(CmdRouter) ->
   Strategy = {simple_one_for_one, 5, 10},
   Children = [
     {undefined,
-      {indira_tcp_reader, start_link, [CmdRecipient]},
+      {indira_tcp_reader, start_link, [CmdRouter]},
       temporary, 5000, worker, [indira_tcp_reader]}
   ],
   {ok, {Strategy, Children}}.

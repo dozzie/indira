@@ -18,27 +18,27 @@
 
 %%%---------------------------------------------------------------------------
 
--record(client, {socket, command_recipient}).
+-record(state, {socket, command_router}).
 
 %%%---------------------------------------------------------------------------
 %%% public API for supervision tree
 %%%---------------------------------------------------------------------------
 
 %% @doc Start TCP reader process.
-start_link(CmdRecipient, ClientSocket) ->
-  gen_server:start_link(?MODULE, {CmdRecipient, ClientSocket}, []).
+start_link(CmdRouter, ClientSocket) ->
+  gen_server:start_link(?MODULE, {CmdRouter, ClientSocket}, []).
 
 %%%---------------------------------------------------------------------------
 %%% gen_server callbacks
 %%%---------------------------------------------------------------------------
 
 %% @doc Initialize {@link gen_server} state.
-init({CmdRecipient, ClientSocket}) ->
-  State = #client{socket = ClientSocket, command_recipient = CmdRecipient},
+init({CmdRouter, ClientSocket}) ->
+  State = #state{socket = ClientSocket, command_router = CmdRouter},
   {ok, State}.
 
 %% @doc Clean up {@link gen_server} state.
-terminate(_Reason, _State = #client{socket = Socket}) ->
+terminate(_Reason, _State = #state{socket = Socket}) ->
   gen_tcp:close(Socket),
   ok.
 
@@ -57,15 +57,15 @@ handle_cast(_Request, State) ->
   {noreply, State}. % ignore unknown calls
 
 %% @doc Handle incoming messages (TCP data and commands).
-handle_info({tcp_closed, Socket}, State = #client{socket = Socket}) ->
+handle_info({tcp_closed, Socket}, State = #state{socket = Socket}) ->
   gen_tcp:close(Socket),
   {stop, normal, State};
 
-handle_info({tcp, Socket, Line}, State = #client{socket = Socket}) ->
-  indira:command(State#client.command_recipient, Line),
+handle_info({tcp, Socket, Line}, State = #state{socket = Socket}) ->
+  indira:command(State#state.command_router, Line),
   {noreply, State};
 
-handle_info(_Any, State = #client{}) ->
+handle_info(_Any, State = #state{}) ->
   {noreply, State}.
 
 %%%---------------------------------------------------------------------------

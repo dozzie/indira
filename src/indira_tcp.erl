@@ -16,8 +16,8 @@
 %%%---------------------------------------------------------------------------
 
 %% @doc Listener description.
-supervision_child_spec(CmdRecipient, {Host, Port} = _Args) ->
-  MFA = {indira_tcp_sup, start_link, [CmdRecipient, Host, Port]},
+supervision_child_spec(CmdRouter, {Host, Port} = _Args) ->
+  MFA = {indira_tcp_sup, start_link, [CmdRouter, Host, Port]},
   {MFA, supervisor}.
 
 %%%---------------------------------------------------------------------------

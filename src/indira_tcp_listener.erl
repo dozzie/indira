@@ -31,7 +31,7 @@
 
 -include_lib("kernel/include/inet.hrl").
 
--record(listen, {socket, worker_pool_sup}).
+-record(state, {socket, worker_pool_sup}).
 
 %%%---------------------------------------------------------------------------
 %%% public API for supervision tree
@@ -60,12 +60,12 @@ init({Supervisor, Host, Port} = _Args) ->
   % ?MODULE:handle_info(), because the connection 
   self() ! {start_worker_pool, Supervisor},
 
-  State = #listen{socket = Socket, worker_pool_sup = undefined},
+  State = #state{socket = Socket, worker_pool_sup = undefined},
   ?INIT_OK(State).
 
 %% @doc Clean up {@link gen_server} state.
 %%   This includes closing the listening socket.
-terminate(_Reason, _State = #listen{socket = Socket}) ->
+terminate(_Reason, _State = #state{socket = Socket}) ->
   gen_tcp:close(Socket),
   ok.
 
@@ -84,20 +84,20 @@ handle_cast(_Request, State) ->
   ?NORETURN(State). % ignore unknown casts
 
 %% @doc Handle incoming messages.
-handle_info({start_worker_pool, Supervisor}, State = #listen{}) ->
+handle_info({start_worker_pool, Supervisor}, State = #state{}) ->
   % retrieve workers pool, as promised in init(listener)
   {ok, WorkerPoolSup} =
     indira_tcp_sup:start_worker_pool(Supervisor),
-  NewState = State#listen{worker_pool_sup = WorkerPoolSup},
+  NewState = State#state{worker_pool_sup = WorkerPoolSup},
   ?NORETURN(NewState);
 
-handle_info(timeout, State = #listen{}) ->
-  #listen{socket = Socket, worker_pool_sup = Supervisor} = State,
+handle_info(timeout, State = #state{}) ->
+  #state{socket = Socket, worker_pool_sup = Supervisor} = State,
 
   case gen_tcp:accept(Socket, ?ACCEPT_TIMEOUT) of
     {ok, Client} ->
       % spawn new worker
-      {ok, Worker} = indira_tcp_sup:new_worker(Supervisor, Client),
+      {ok, Worker} = indira_tcp_sup:start_worker(Supervisor, Client),
 
       % assign client socket to the newly spawned worker and make it active
       gen_tcp:controlling_process(Client, Worker),
@@ -115,7 +115,7 @@ handle_info(timeout, State = #listen{}) ->
   end;
 
 %% ignore other messages
-handle_info(_Any, State = #listen{}) ->
+handle_info(_Any, State = #state{}) ->
   ?NORETURN(State).
 
 %%%---------------------------------------------------------------------------

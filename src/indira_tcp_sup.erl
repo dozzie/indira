@@ -12,7 +12,7 @@
 
 %% workers supervisor
 -export([start_worker_pool/1]). % start workers supervisor)
--export([new_worker/2]).        % start worker
+-export([start_worker/2]).      % start worker
 
 %% supervisor callbacks
 -export([init/1]).
@@ -25,8 +25,8 @@
 %% starting supervisor process
 
 %% @doc Start the supervisor process.
-start_link(CmdRecipient, Host, Port) ->
-  supervisor:start_link(?MODULE, {CmdRecipient, Host, Port}).
+start_link(CmdRouter, Host, Port) ->
+  supervisor:start_link(?MODULE, {CmdRouter, Host, Port}).
 
 %%----------------------------------------------------------
 %% wrappers around `supervisor' module
@@ -45,23 +45,23 @@ start_worker_pool(Supervisor) ->
   {ok, Pid}.
 
 %% @doc Start new reader child for a given TCP socket.
-%% @see indira_tcp_reader_sup:new_worker/2
-new_worker(Supervisor, ClientSocket) ->
-  indira_tcp_reader_sup:new_worker(Supervisor, ClientSocket).
+%% @see indira_tcp_reader_sup:start_worker/2
+start_worker(Supervisor, ClientSocket) ->
+  indira_tcp_reader_sup:start_worker(Supervisor, ClientSocket).
 
 %%%---------------------------------------------------------------------------
 %%% supervisor callbacks
 %%%---------------------------------------------------------------------------
 
 %% @doc Initialize supervisor.
-init({CmdRecipient, Host, Port} = _Args) ->
+init({CmdRouter, Host, Port} = _Args) ->
   Strategy = {one_for_all, 5, 10},
   Children = [
     {indira_tcp_listener,
       {indira_tcp_listener, start_link, [self(), Host, Port]},
       permanent, 5000, worker, [indira_tcp_listener]},
     {indira_tcp_worker_pool_sup,
-      {indira_tcp_reader_sup, start_link, [CmdRecipient]},
+      {indira_tcp_reader_sup, start_link, [CmdRouter]},
       permanent, 5000, supervisor, [indira_tcp_reader_sup]}
   ],
   {ok, {Strategy, Children}}.
