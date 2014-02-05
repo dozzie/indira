@@ -78,11 +78,18 @@ terminate(_Reason, _State) ->
 %% @doc Handle {@link gen_server:call/2}.
 handle_call({command, ReplyTo, Line} = _Request, _From, State) ->
   % TODO: make this a message instead of call (result is a message anyway)
-  % TODO: parse `Line'
-  State#state.commander ! {command, self(), ReplyTo, Line},
-  io:fwrite("[indira router] got command: ~200p -> ~200p -> ~200p~n",
-            [ReplyTo, Line, State#state.commander]),
-  {reply, ok, State};
+  Result = case parse_line(Line) of
+    {ok, Command} ->
+      io:fwrite("[indira router] got command: ~200p -> ~200p -> ~200p~n",
+                [ReplyTo, Command, State#state.commander]),
+      State#state.commander ! {command, self(), ReplyTo, Command},
+      ok;
+    {error, _Reason} = Error ->
+      % TODO: error_logger:warning_report()
+      Error
+  end,
+  % let the caller crash on non-ok
+  {reply, Result, State};
 
 handle_call(stop = _Request, _From, State) ->
   {stop, normal, ok, State};
@@ -147,6 +154,27 @@ command(Indira, Line) ->
 %%   clients.
 command(Indira, RoutingKey, Line) ->
   gen_server:call(Indira, {command, {self(), RoutingKey}, Line}).
+
+%%%---------------------------------------------------------------------------
+%%% internal helpers
+%%%---------------------------------------------------------------------------
+
+%% @doc Parse command line to Erlang data structure.
+parse_line(Line) when is_binary(Line) ->
+  parse_line(binary_to_list(Line));
+parse_line(Line) ->
+  case indira_proto_lexer:string(Line) of
+    {ok, Tokens, _EndLine} ->
+      % TODO: what to do with non-empty _EndLine?
+      case indira_proto_parser:parse(Tokens) of
+        {ok, Result} ->
+          {ok, Result};
+        {error, {_LineNumber, _ParserModule, _Message}} ->
+          {error, badarg}
+      end;
+    {error, {_LineNumber, _LexerModule, _Message}, _WhatsThis} ->
+      {error, badarg}
+  end.
 
 %%%---------------------------------------------------------------------------
 %%% vim:ft=erlang:foldmethod=marker

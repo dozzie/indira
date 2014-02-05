@@ -1,3 +1,8 @@
+% TODO:
+%   * skip empty lines?
+%   * comments?
+%   * simple, non-JSON sequence of `cmd arg1 arg2 key=value key1=value1'
+
 %Header
 %  "..."
 %.
