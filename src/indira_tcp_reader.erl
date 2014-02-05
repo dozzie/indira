@@ -34,6 +34,7 @@ start_link(CmdRouter, ClientSocket) ->
 
 %% @doc Initialize {@link gen_server} state.
 init({CmdRouter, ClientSocket} = _Args) ->
+  link(ClientSocket),
   State = #state{socket = ClientSocket, command_router = CmdRouter},
   {ok, State}.
 
@@ -62,7 +63,8 @@ handle_info({tcp_closed, Socket} = _Msg, State = #state{socket = Socket}) ->
   {stop, normal, State};
 
 handle_info({tcp, Socket, Line} = _Msg, State = #state{socket = Socket}) ->
-  indira:command(State#state.command_router, Line),
+  % crash on parse error
+  ok = indira:command(State#state.command_router, Line),
   {noreply, State};
 
 handle_info({result, Line} = _Msg, State = #state{socket = Socket}) ->
