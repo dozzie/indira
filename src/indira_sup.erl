@@ -1,7 +1,7 @@
 %%%---------------------------------------------------------------------------
-%%%
-%%% Indira application (toplevel) supervisor.
-%%%
+%%% @doc
+%%%   Indira top-level supervisor.
+%%% @end
 %%%---------------------------------------------------------------------------
 
 -module(indira_sup).
@@ -19,12 +19,17 @@
 %%% public API
 %%%---------------------------------------------------------------------------
 
+%% @doc Start the supervisor process.
 start_link() ->
   supervisor:start_link(?MODULE, []).
 
 %%%---------------------------------------------------------------------------
 
-%% {ok, Pid} | {error, Reason}
+%% @doc Start listeners supervisor.
+%%
+%% @spec start_listener_pool(pid()) ->
+%%   {ok, Pid} | {error, Reason}
+
 start_listener_pool(Supervisor) ->
   % FIXME: this is subject to a race condition with parent
   % NOTE: this is somewhat ugly to manually search through the children, but
@@ -33,7 +38,9 @@ start_listener_pool(Supervisor) ->
   {_, Pid, _, _} = lists:keyfind(indira_listener_sup, 1, Children),
   {ok, Pid}.
 
-%% add new listener child (worker or supervision tree) to existing supervisor
+%% @doc Start new listener child.
+%%   The child can be a worker or a supervisor, according to
+%%   {@link indira_listener}.
 start_listener(ListenerSupervisor, ListenerSpec) ->
   indira_listener_sup:start_listener(ListenerSupervisor, ListenerSpec).
 
@@ -41,7 +48,8 @@ start_listener(ListenerSupervisor, ListenerSpec) ->
 %%% supervisor callbacks
 %%%---------------------------------------------------------------------------
 
-init([]) ->
+%% @doc Initialize supervisor.
+init([] = _Args) ->
   Strategy = {one_for_all, 5, 10},
   Children = [
     {indira_router,

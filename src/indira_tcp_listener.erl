@@ -1,7 +1,9 @@
 %%%---------------------------------------------------------------------------
-%%%
-%%% TCP listener.
-%%%
+%%% @doc
+%%%   TCP listener process. TCP listener listens on TCP socket (surprise!),
+%%%   accepts incoming connections and spawns for each of them a TCP reader
+%%%   processes.
+%%% @end
 %%%---------------------------------------------------------------------------
 
 -module(indira_tcp_listener).
@@ -35,8 +37,7 @@
 %%% public API for supervision tree
 %%%---------------------------------------------------------------------------
 
-%% spawn process that listens on TCP socket, accepts connections and spawns
-%% reader workers
+%% @doc Start TCP listener process.
 start_link(Supervisor, Host, Port) ->
   gen_server:start_link(?MODULE, {Supervisor, Host, Port}, []).
 
@@ -44,6 +45,8 @@ start_link(Supervisor, Host, Port) ->
 %%% connection acceptor
 %%%---------------------------------------------------------------------------
 
+%% @doc Initialize {@link gen_server} state.
+%%   This includes creating listening TCP socket.
 init({Supervisor, Host, Port} = _Args) ->
   % create listening socket
   BindOpt = address_to_bind_option(Host),
@@ -53,33 +56,34 @@ init({Supervisor, Host, Port} = _Args) ->
 
   % first thing to do after this call is finished, the workers pool must be
   % retrieved
-  % TODO: explain why there's no race condition between gen_tcp:accept() and
-  % ?MODULE:handle_info()
+  % NOTE: There's no race condition between gen_tcp:accept() and
+  % ?MODULE:handle_info(), because the connection 
   self() ! {start_worker_pool, Supervisor},
 
   State = #listen{socket = Socket, worker_pool_sup = undefined},
   ?INIT_OK(State).
 
-
+%% @doc Clean up {@link gen_server} state.
+%%   This includes closing the listening socket.
 terminate(_Reason, _State = #listen{socket = Socket}) ->
   gen_tcp:close(Socket),
   ok.
 
-
+%% @doc Handle code change.
 code_change(_OldVsn, State, _Extra) ->
   ?CODE_CHANGE(State).
 
-
+%% @doc Handle {@link gen_server:call/2}.
 handle_call(stop, _From, State) ->
   ?STOP_RETURN(normal, ok, State);
 handle_call(_Request, _From, State) ->
   ?NORETURN(State). % ignore unknown calls
 
-
+%% @doc Handle {@link gen_server:cast/2}.
 handle_cast(_Request, State) ->
   ?NORETURN(State). % ignore unknown casts
 
-
+%% @doc Handle incoming messages.
 handle_info({start_worker_pool, Supervisor}, State = #listen{}) ->
   % retrieve workers pool, as promised in init(listener)
   {ok, WorkerPoolSup} =
@@ -118,7 +122,7 @@ handle_info(_Any, State = #listen{}) ->
 %%% network helpers
 %%%---------------------------------------------------------------------------
 
-%% resolve DNS address to IP
+%% @doc Resolve DNS address to IP.
 address_to_bind_option(any) ->
   [];
 address_to_bind_option(Addr) when is_list(Addr) ->

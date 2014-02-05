@@ -23,6 +23,7 @@
 %%% API for supervision tree
 %%%---------------------------------------------------------------------------
 
+%% @doc Start router process.
 start_link(Parent) ->
   % TODO: don't require registering new process
   gen_server:start_link({local, ?MODULE}, ?MODULE, Parent, []).
@@ -31,6 +32,7 @@ start_link(Parent) ->
 %%% gen_server callbacks
 %%%---------------------------------------------------------------------------
 
+%% @doc Initialize {@link gen_server} state.
 init(Parent) ->
   % I can't call parent until this function finishes; I'll add a message to
   % process' mailbox for handling later (just calling `spawn_listeners/2')
@@ -39,7 +41,8 @@ init(Parent) ->
   State = #state{},
   {ok, State}.
 
-%% @private spawn_listeners(Parent, State) -> {ok, NewState} {{{
+%% spawn_listeners(Parent, State) -> {ok, NewState} {{{
+%% @doc Spawn listeners defined for this Indira instance.
 spawn_listeners(Parent, State) ->
   {ok, ListenerSup} = indira_sup:start_listener_pool(Parent),
 
@@ -57,9 +60,11 @@ spawn_listeners(Parent, State) ->
   {ok, State}.
 % }}}
 
+%% @doc Clean up {@link gen_server} state.
 terminate(_Reason, _State) ->
   ok.
 
+%% @doc Handle {@link gen_server:call/2}.
 handle_call(Request, _From, State) ->
   case Request of
     {command, Command} ->
@@ -74,11 +79,13 @@ handle_call(Request, _From, State) ->
       {reply, ok, State}
   end.
 
+%% @doc Handle {@link gen_server:cast/2}.
 handle_cast(_Request, State) ->
   % TODO: error_logger:info_report()
   io:fwrite("[indira router] cast: WTF? ~p~n", [_Request]),
   {noreply, State}.
 
+%% @doc Handle incoming messages.
 handle_info({spawn_listeners, Parent}, State) ->
   % adding listeners supervision tree, as promised in `init/1'
   {ok, NewState} = spawn_listeners(Parent, State),
@@ -88,6 +95,7 @@ handle_info(_Message, State) ->
   io:fwrite("[indira router] message: WTF? ~p~n", [_Message]),
   {noreply, State}.
 
+%% @doc Handle code change.
 code_change(_OldVsn, State, _Extra) ->
   % TODO: error_logger:info_report()
   io:fwrite("[indira router] code change~n"),

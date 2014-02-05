@@ -1,7 +1,7 @@
 %%%---------------------------------------------------------------------------
-%%%
-%%% TCP connection handler.
-%%%
+%%% @doc
+%%%   TCP connection handler.
+%%% @end
 %%%---------------------------------------------------------------------------
 
 -module(indira_tcp_reader).
@@ -24,7 +24,7 @@
 %%% public API for supervision tree
 %%%---------------------------------------------------------------------------
 
-%% spawn process that reads everything from TCP socket
+%% @doc Start TCP reader process.
 start_link(CmdRecipient, ClientSocket) ->
   gen_server:start_link(?MODULE, {CmdRecipient, ClientSocket}, []).
 
@@ -32,30 +32,31 @@ start_link(CmdRecipient, ClientSocket) ->
 %%% gen_server callbacks
 %%%---------------------------------------------------------------------------
 
+%% @doc Initialize {@link gen_server} state.
 init({CmdRecipient, ClientSocket}) ->
   State = #client{socket = ClientSocket, command_recipient = CmdRecipient},
   {ok, State}.
 
-
+%% @doc Clean up {@link gen_server} state.
 terminate(_Reason, _State = #client{socket = Socket}) ->
   gen_tcp:close(Socket),
   ok.
 
-
+%% @doc Handle code change.
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
-
+%% @doc Handle {@link gen_server:call/2}.
 handle_call(stop, _From, State) ->
   {stop, normal, ok, State};
 handle_call(_Request, _From, State) ->
   {noreply, State}. % ignore unknown calls
 
-
+%% @doc Handle {@link gen_server:cast/2}.
 handle_cast(_Request, State) ->
   {noreply, State}. % ignore unknown calls
 
-
+%% @doc Handle incoming messages (TCP data and commands).
 handle_info({tcp_closed, Socket}, State = #client{socket = Socket}) ->
   gen_tcp:close(Socket),
   {stop, normal, State};

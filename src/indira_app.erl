@@ -1,7 +1,7 @@
 %%%---------------------------------------------------------------------------
-%%%
-%%% Indira application entry point.
-%%%
+%%% @doc
+%%%   Indira application entry point.
+%%% @end
 %%%---------------------------------------------------------------------------
 
 -module(indira_app).
@@ -15,9 +15,11 @@
 %%% application callbacks
 %%%---------------------------------------------------------------------------
 
+%% @doc Start application.
 start(_StartType, _StartArgs) ->
   indira_sup:start_link().
 
+%% @doc Stop application.
 stop(_State) ->
   ok.
 

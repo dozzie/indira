@@ -1,7 +1,7 @@
 %%%---------------------------------------------------------------------------
-%%%
-%%% Supervisor for listeners (see `indira_listener' module).
-%%%
+%%% @doc
+%%%   Supervisor for listeners.
+%%% @end
 %%%---------------------------------------------------------------------------
 
 -module(indira_listener_sup).
@@ -19,12 +19,13 @@
 %%% public API
 %%%---------------------------------------------------------------------------
 
+%% @doc Start the supervisor process.
 start_link() ->
   supervisor:start_link(?MODULE, []).
 
 %%%---------------------------------------------------------------------------
 
-%% add new listener child (worker or supervision tree) to existing supervisor
+%% @doc Start new listener child under the supervisor.
 start_listener(Supervisor, {{M,F,A}, ChildType} = _Spec) ->
   Child = {
     % I don't plan to manually stop/restart children anyway, and this function
@@ -50,7 +51,8 @@ start_listener(Supervisor, {{M,F,A}, ChildType} = _Spec) ->
 %%% supervisor callbacks
 %%%---------------------------------------------------------------------------
 
-init([]) ->
+%% @doc Initialize supervisor.
+init([] = _Args) ->
   Strategy = {one_for_one, 5, 10},
   Children = [],
   {ok, {Strategy, Children}}.

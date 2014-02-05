@@ -1,7 +1,7 @@
 %%%---------------------------------------------------------------------------
-%%%
-%%% TCP workers supervisor (worker pool).
-%%%
+%%% @doc
+%%%   TCP workers supervisor (worker pool).
+%%% @end
 %%%---------------------------------------------------------------------------
 
 -module(indira_tcp_reader_sup).
@@ -21,9 +21,11 @@
 %%----------------------------------------------------------
 %% starting supervisor process
 
+%% @doc Start the supervisor process.
 start_link(CmdRecipient) ->
   supervisor:start_link(?MODULE, CmdRecipient).
 
+%% @doc Start new worker child for a socket.
 new_worker(Supervisor, ClientSocket) ->
   % strip `Info' field from `{ok, Child, Info}' tuple, to always return
   % `{ok, Child}' on success
@@ -40,6 +42,7 @@ new_worker(Supervisor, ClientSocket) ->
 %%% supervisor callbacks
 %%%---------------------------------------------------------------------------
 
+%% @doc Initialize supervisor.
 init(CmdRecipient) ->
   Strategy = {simple_one_for_one, 5, 10},
   Children = [

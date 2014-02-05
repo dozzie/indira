@@ -1,7 +1,7 @@
 %%%---------------------------------------------------------------------------
-%%%
-%%% UDP listener.
-%%%
+%%% @doc
+%%%   UDP listener (entry point and actual worker).
+%%% @end
 %%%---------------------------------------------------------------------------
 
 -module(indira_udp).
@@ -32,6 +32,7 @@
 %%% Indira listener API
 %%%---------------------------------------------------------------------------
 
+%% @doc Listener description.
 supervision_child_spec(CmdRecipient, {Host, Port} = _Args) ->
   MFA = {?MODULE, start_link, [CmdRecipient, Host, Port]},
   {MFA, worker}.
@@ -40,7 +41,7 @@ supervision_child_spec(CmdRecipient, {Host, Port} = _Args) ->
 %%% public API for supervision tree
 %%%---------------------------------------------------------------------------
 
-%% spawn process that listens on UDP socket
+%% @doc Start UDP listener process.
 start_link(CmdRecipient, Host, Port) ->
   Args = [CmdRecipient, Host, Port],
   gen_server:start_link(?MODULE, Args, []).
@@ -49,7 +50,9 @@ start_link(CmdRecipient, Host, Port) ->
 %%% connection acceptor
 %%%---------------------------------------------------------------------------
 
-init([CmdRecipient, Host, Port]) ->
+%% @doc Initialize {@link gen_server} state.
+%%   This includes creating listening UDP socket.
+init([CmdRecipient, Host, Port] = _Args) ->
   % create listening socket
   BindOpt = address_to_bind_option(Host),
   {ok, Socket} = gen_udp:open(Port, BindOpt ++ [
@@ -59,26 +62,27 @@ init([CmdRecipient, Host, Port]) ->
   State = #state{socket = Socket, command_recipient = CmdRecipient},
   {ok, State}.
 
-
+%% @doc Clean up {@link gen_server} state.
+%%   This includes closing the listening socket.
 terminate(_Reason, _State = #state{socket = Socket}) ->
   gen_udp:close(Socket),
   ok.
 
-
+%% @doc Handle code change.
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
-
+%% @doc Handle {@link gen_server:call/2}.
 handle_call(stop, _From, State) ->
   {stop, normal, ok, State};
 handle_call(_Request, _From, State) ->
   {noreply, State}. % ignore unknown calls
 
-
+%% @doc Handle {@link gen_server:cast/2}.
 handle_cast(_Request, State) ->
   {noreply, State}. % ignore unknown casts
 
-
+%% @doc Handle incoming messages (UDP data and commands).
 handle_info({udp, Socket, _IP, _Port, Data}, State = #state{socket = Socket}) ->
   #state{command_recipient = CmdRecipient} = State,
   indira:command(CmdRecipient, "[udp] " ++ Data),
@@ -92,7 +96,7 @@ handle_info(_Any, State = #state{}) ->
 %%% network helpers
 %%%---------------------------------------------------------------------------
 
-%% resolve DNS address to IP
+%% @doc Resolve DNS address to IP.
 address_to_bind_option(any) ->
   [];
 address_to_bind_option(Addr) when is_list(Addr) ->

@@ -1,5 +1,4 @@
 @author Stanislaw Klekot <dozzie@jarowit.net>
-@version 0.0.0
 @title Indira, Mother of D(a)emons.
 @doc
 
@@ -17,6 +16,6 @@ which helps in following (somewhat tedious) tasks:
   <li>other management commands</li>
 </ul>
 
-Note that Indira IS NOT a module for loading data. It may be highly
+Note that Indira <b>is not</b> a module for loading data. It may be highly
 inefficient. For management interface it shouldn't matter, though:
 commands are typically a low-bandwidth traffic.

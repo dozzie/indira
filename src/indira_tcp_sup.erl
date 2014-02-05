@@ -1,7 +1,7 @@
 %%%---------------------------------------------------------------------------
-%%%
-%%% Indira TCP listener supervisor.
-%%%
+%%% @doc
+%%%   Indira TCP listener supervisor.
+%%% @end
 %%%---------------------------------------------------------------------------
 
 -module(indira_tcp_sup).
@@ -24,11 +24,17 @@
 %%----------------------------------------------------------
 %% starting supervisor process
 
+%% @doc Start the supervisor process.
 start_link(CmdRecipient, Host, Port) ->
   supervisor:start_link(?MODULE, {CmdRecipient, Host, Port}).
 
 %%----------------------------------------------------------
 %% wrappers around `supervisor' module
+
+%% @doc Start TCP readers supervisor.
+%%
+%% @spec start_worker_pool(pid()) ->
+%%   {ok, Pid} | {error, Reason}
 
 start_worker_pool(Supervisor) ->
   % FIXME: this is subject to a race condition with parent
@@ -38,6 +44,8 @@ start_worker_pool(Supervisor) ->
   {_, Pid, _, _} = lists:keyfind(indira_tcp_worker_pool_sup, 1, Children),
   {ok, Pid}.
 
+%% @doc Start new reader child for a given TCP socket.
+%% @see indira_tcp_reader_sup:new_worker/2
 new_worker(Supervisor, ClientSocket) ->
   indira_tcp_reader_sup:new_worker(Supervisor, ClientSocket).
 
@@ -45,6 +53,7 @@ new_worker(Supervisor, ClientSocket) ->
 %%% supervisor callbacks
 %%%---------------------------------------------------------------------------
 
+%% @doc Initialize supervisor.
 init({CmdRecipient, Host, Port} = _Args) ->
   Strategy = {one_for_all, 5, 10},
   Children = [
