@@ -8,18 +8,37 @@
 %.
 
 Nonterminals
+  line
   value
   object array scalar
   key_value_list key_value
   value_list
+  ckv_list ckv
 .
 
 Terminals
   '{' '}' '[' ']' ',' ':'
   string number true false null
+  assign_string assign_number word
 .
 
-Rootsymbol value.
+Rootsymbol line.
+
+%-----------------------------------------------------------
+
+line -> ckv_list  : lists:reverse('$1').
+line -> value     : '$1'.
+
+%-----------------------------------------------------------
+% K/V part
+
+% NOTE: reversed list order
+ckv_list -> ckv_list ckv  : ['$2' | '$1'].
+ckv_list -> ckv           : ['$1'].
+
+ckv -> word  : value('$1').
+ckv -> assign_string : value('$1').
+ckv -> assign_number : value('$1').
 
 %-----------------------------------------------------------
 % JSON part
