@@ -53,6 +53,10 @@ receives messages of specific structure and replies to them with other
 messages (see {@link indira} module for protocol details). Still, an
 application doesn't need to know about Indira.
 
+In fact, the application doesn't even need to include command executor. It
+could be written separately, as long as it knows how to talk to the
+application.
+
 Indira on its part will start several so called
 {@link gen_indira_listener. listeners}, which receive commands from user. The
 commands will be passed to command executor and replies will be passed back to
