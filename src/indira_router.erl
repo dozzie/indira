@@ -77,7 +77,8 @@ terminate(_Reason, _State) ->
 
 %% @doc Handle {@link gen_server:call/2}.
 handle_call({command, ReplyTo, Line} = _Request, _From, State) ->
-  % TODO: make this a message instead of call (result is a message anyway)
+  % I wanted to make this a pure message, but it turned out that I want parse
+  % error reporting
   Result = case parse_line(Line) of
     {ok, Command} ->
       io:fwrite("[indira router] got command: ~200p -> ~200p -> ~200p~n",
@@ -140,6 +141,12 @@ code_change(_OldVsn, State, _Extra) ->
 %% @doc Send command to Indira router.
 %%   Response to the command will be passed as a message to the caller of this
 %%   function.
+%%
+%%   Function may fail on syntax error, `{error,Reason}' will be returned in
+%%   such case.
+%%
+%% @spec command(pid(), binary() | string()) ->
+%%   ok | {error, Reason}
 command(Indira, Line) ->
   gen_server:call(Indira, {command, self(), Line}).
 
@@ -147,11 +154,17 @@ command(Indira, Line) ->
 %%   Response to the command will be passed as a message to the caller of this
 %%   function.
 %%
+%%   Function may fail on syntax error, `{error,Reason}' will be returned in
+%%   such case.
+%%
 %%   `RoutingKey' is an additional information to tell apart between multiple
 %%   clients and will be included in command reply message.
 %%
 %%   This call form is only needed when a single process handles multiple
 %%   clients.
+%%
+%% @spec command(pid(), term(), binary() | string()) ->
+%%   ok | {error, Reason}
 command(Indira, RoutingKey, Line) ->
   gen_server:call(Indira, {command, {self(), RoutingKey}, Line}).
 
