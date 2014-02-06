@@ -34,7 +34,6 @@ start_link(CmdRouter, ClientSocket) ->
 
 %% @doc Initialize {@link gen_server} state.
 init({CmdRouter, ClientSocket} = _Args) ->
-  link(ClientSocket),
   State = #state{socket = ClientSocket, command_router = CmdRouter},
   {ok, State}.
 
