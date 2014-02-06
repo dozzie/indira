@@ -17,8 +17,11 @@ doc edoc:
 compile build:
 	rebar compile
 
+YECC_ERL_FILES = $(subst .yrl,.erl,$(subst .xrl,.erl,$(wildcard src/*.[xy]rl)))
+ERL_SOURCE_FILES = $(filter-out $(YECC_ERL_FILES),$(wildcard src/*.erl))
 dialyzer:
-	dialyzer $(strip $(DIALYZER_OPTS)) --src src
+	@echo "dialyzer $(strip $(DIALYZER_OPTS)) --src src/*.erl"
+	@dialyzer $(strip $(DIALYZER_OPTS)) --src $(ERL_SOURCE_FILES)
 
 #-----------------------------------------------------------------------------
 
