@@ -107,19 +107,26 @@ handle_cast(_Request, State) ->
   {noreply, State}.
 
 %% @doc Handle incoming messages.
-handle_info({spawn_listeners, Parent}, State) ->
+handle_info({spawn_listeners, Parent} = _Message, State) ->
   % adding listeners supervision tree, as promised in `init/1'
   {ok, NewState} = spawn_listeners(Parent, State),
   {noreply, NewState};
 
-handle_info({result, ReplyTo, Value} = _Request, State) ->
+handle_info({result, ReplyTo, Reply} = _Message, State) ->
   % send result back to listener
   io:fwrite("[indira router] got command result: ~200p -> ~200p~n",
-            [Value, ReplyTo]),
-  % TODO: serialize `Value'
-  case ReplyTo of
-    {Pid, Hint} -> Pid ! {result, Hint, Value};
-    _Pid -> ReplyTo ! {result, Value}
+            [Reply, ReplyTo]),
+
+  case indira_proto_serializer:encode(Reply) of
+    {ok, JSON} ->
+      case ReplyTo of
+        {Pid, Hint} -> Pid ! {result, Hint, JSON};
+        _Pid -> ReplyTo ! {result, JSON}
+      end;
+    {error, _Reason} ->
+      % command executor sent an invalid structure
+      % TODO: error_logger:error_report()
+      ignore
   end,
   {noreply, State};
 
