@@ -63,6 +63,12 @@ commands will be passed to command executor and replies will be passed back to
 the user. List of listeners to start is specified in application
 configuration (see {@link examples_app_config} for some examples).
 
+== Supervision tree ==
+
+The supervision tree looks as follows:
+
+<img src="images/indira_supervision_tree.png" alt="Indira supervision tree" />
+
 == Where to start reading documentation ==
 
 Indira users typically want to study {@link indira} module as their main
