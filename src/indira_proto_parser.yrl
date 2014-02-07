@@ -26,8 +26,8 @@ Rootsymbol line.
 
 %-----------------------------------------------------------
 
-line -> ckv_list  : lists:reverse('$1').
-line -> value     : '$1'.
+line -> ckv ckv_list : {'$1', lists:reverse('$2')}.
+line -> value        : '$1'.
 
 %-----------------------------------------------------------
 % K/V part
