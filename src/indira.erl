@@ -53,6 +53,11 @@ set_option(App, Option, Value) ->
   end,
   application:set_env(App, Option, Value).
 
+%% @doc Load application configuration file (suitable for `-config' VM
+%%   option).
+load_app_config(Config) ->
+  'TODO'.
+
 %% }}}
 %%----------------------------------------------------------
 %% sleep forever {{{
