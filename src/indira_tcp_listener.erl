@@ -112,8 +112,9 @@ handle_info(timeout, State = #state{}) ->
       % OK, expected thing
       ?NORETURN(State);
 
-    {error, _Reason} ->
-      % TODO: log this
+    {error, Reason} ->
+      {ok, Sockname} = inet:sockname(Socket),
+      indira:log_error(tcp_accept, Reason, [{socket, Sockname}]),
       ?NORETURN(State)
   end;
 

@@ -81,12 +81,13 @@ handle_call({command, ReplyTo, Line} = _Request, _From, State) ->
   % error reporting
   Result = case parse_line(Line) of
     {ok, Command} ->
-      io:fwrite("[indira router] got command: ~200p -> ~200p -> ~200p~n",
-                [ReplyTo, Command, State#state.commander]),
+      % Indira is not the place where the commands should be logged, leave it
+      % to the commander
       State#state.commander ! {command, self(), ReplyTo, Command},
       ok;
     {error, _Reason} = Error ->
-      % TODO: error_logger:warning_report()
+      % NOTE: error logging is left to listeners (they can properly format
+      % client's address)
       Error
   end,
   % let the caller crash on non-ok
@@ -96,14 +97,12 @@ handle_call(stop = _Request, _From, State) ->
   {stop, normal, ok, State};
 
 handle_call(_Request, _From, State) ->
-  % TODO: error_logger:info_report()
-  io:fwrite("[indira router] call: WTF? ~p~n", [_Request]),
+  % ignore unknown calls
   {reply, ok, State}.
 
 %% @doc Handle {@link gen_server:cast/2}.
 handle_cast(_Request, State) ->
-  % TODO: error_logger:info_report()
-  io:fwrite("[indira router] cast: WTF? ~p~n", [_Request]),
+  % ignore unknown casts
   {noreply, State}.
 
 %% @doc Handle incoming messages.
@@ -114,31 +113,30 @@ handle_info({spawn_listeners, Parent} = _Message, State) ->
 
 handle_info({result, ReplyTo, Reply} = _Message, State) ->
   % send result back to listener
-  io:fwrite("[indira router] got command result: ~200p -> ~200p~n",
-            [Reply, ReplyTo]),
-
   case indira_proto_serializer:encode(Reply) of
     {ok, JSON} ->
       case ReplyTo of
         {Pid, Hint} -> Pid ! {result, Hint, JSON};
         _Pid -> ReplyTo ! {result, JSON}
       end;
-    {error, _Reason} ->
+    {error, Reason} ->
       % command executor sent an invalid structure
-      % TODO: error_logger:error_report()
+      % I can't give more readable client's address than `ReplyTo', but this
+      % should happen rarely, anyway
+      indira:log_error(bad_command_reply, Reason,
+                       [{reply, Reply}, {client_route, ReplyTo}]),
+      % TODO: maybe send an error message to ReplyTo? like,
+      % `{result_error,Reason}'? (update `gen_indira_listener' doc)
       ignore
   end,
   {noreply, State};
 
 handle_info(_Message, State) ->
-  % TODO: error_logger:info_report()
-  io:fwrite("[indira router] message: WTF? ~p~n", [_Message]),
+  % ignore unknown messages
   {noreply, State}.
 
 %% @doc Handle code change.
 code_change(_OldVsn, State, _Extra) ->
-  % TODO: error_logger:info_report()
-  io:fwrite("[indira router] code change~n"),
   {ok, State}.
 
 %%%---------------------------------------------------------------------------
@@ -150,7 +148,8 @@ code_change(_OldVsn, State, _Extra) ->
 %%   function.
 %%
 %%   Function may fail on syntax error, `{error,Reason}' will be returned in
-%%   such case.
+%%   such case. The caller is responsible for logging an error (possibly with
+%%   {@link indira:log_error/3}).
 %%
 %% @spec command(pid(), binary() | string()) ->
 %%   ok | {error, Reason}
@@ -162,7 +161,8 @@ command(Indira, Line) ->
 %%   function.
 %%
 %%   Function may fail on syntax error, `{error,Reason}' will be returned in
-%%   such case.
+%%   such case. The caller is responsible for logging an error (possibly with
+%%   {@link indira:log_error/3}).
 %%
 %%   `RoutingKey' is an additional information to tell apart between multiple
 %%   clients and will be included in command reply message.
@@ -185,14 +185,13 @@ parse_line(Line) when is_binary(Line) ->
 parse_line(Line) ->
   case indira_proto_lexer:string(Line) of
     {ok, Tokens, _EndLine} ->
-      % TODO: what to do with non-empty _EndLine?
       case indira_proto_parser:parse(Tokens) of
         {ok, Result} ->
           {ok, Result};
         {error, {_LineNumber, _ParserModule, _Message}} ->
           {error, badarg}
       end;
-    {error, {_LineNumber, _LexerModule, _Message}, _WhatsThis} ->
+    {error, {_LineNumber, _LexerModule, _Message}, _} ->
       {error, badarg}
   end.
 

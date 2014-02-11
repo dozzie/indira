@@ -62,9 +62,18 @@ handle_info({tcp_closed, Socket} = _Msg, State = #state{socket = Socket}) ->
   {stop, normal, State};
 
 handle_info({tcp, Socket, Line} = _Msg, State = #state{socket = Socket}) ->
-  % crash on parse error
-  ok = indira:command(State#state.command_router, Line),
-  {noreply, State};
+  % log-and-terminate on parse error
+  case indira:command(State#state.command_router, Line) of
+    ok ->
+      {noreply, State};
+    {error, Reason} ->
+      {ok, Sockname} = inet:sockname(Socket),
+      {ok, Peername} = inet:peername(Socket),
+      Client = {tcp, Sockname, Peername},
+      indira:log_error(bad_command_line, Reason,
+                       [{command_line, Line}, {client, Client}]),
+      {stop, bad_command_line, State}
+  end;
 
 handle_info({result, Line} = _Msg, State = #state{socket = Socket}) ->
   gen_tcp:send(Socket, [Line, "\n"]),

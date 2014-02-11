@@ -32,6 +32,11 @@
 %%%   needs to distinguish them. Listener may specify anything as
 %%%   a `RoutingHint' -- it's opaque to Indira router.
 %%%
+%%%   To provide uniformly formatted logs, listener should log errors using
+%%%   {@link indira:log_error/3} (e.g. in case of problems in communication
+%%%   with client) or {@link indira:log_critical/3} (e.g. in case of socket
+%%%   setup error).
+%%%
 %%%   == Entry point module API ==
 %%%
 %%%   `Module:supervision_child_spec/2' gets two arguments: Indira router

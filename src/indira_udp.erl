@@ -94,11 +94,20 @@ handle_cast(_Request, State) ->
   {noreply, State}. % ignore unknown casts
 
 %% @doc Handle incoming messages (UDP data and commands).
-handle_info({udp, Socket, IP, Port, Data} = _Msg,
+handle_info({udp, Socket, IP, Port, Line} = _Msg,
             State = #state{socket = Socket}) ->
   #state{command_router = CmdRouter} = State,
   RoutingHint = {IP, Port},
-  indira:command(CmdRouter, RoutingHint, "[udp] " ++ Data),
+  case indira:command(CmdRouter, RoutingHint, Line) of
+    ok ->
+      ok;
+    {error, Reason} ->
+      {ok, Sockname} = inet:sockname(Socket),
+      Client = {udp, Sockname, RoutingHint},
+      indira:log_error(bad_command_line, Reason,
+                       [{command_line, Line}, {client, Client}]),
+      proceed
+  end,
   {noreply, State};
 
 handle_info({result, {IP, Port} = _RoutingHint, Line} = _Msg,
