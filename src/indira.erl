@@ -134,8 +134,9 @@ load_plugins_dir(Directory) ->
 %% @doc Write PID file.
 write_pidfile(undefined) ->
   ok;
-write_pidfile(_Filename) ->
-  'TODO'.
+write_pidfile(Filename) ->
+  Pid = iolist_to_binary([os:getpid(), "\n"]),
+  file:write_file(Filename, Pid).
 
 %% }}}
 %%----------------------------------------------------------
