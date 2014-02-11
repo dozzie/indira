@@ -156,8 +156,9 @@ chdir(Directory) ->
 
 %% @TODO redirect `standard_io' (group leader)
 %% @TODO redirect `standard_error'
-%% @TODO disable TTY logging
-%% @TODO set logfile
+%% @TODO disable TTY logging ({@link error_logger:tty/1})
+%% @TODO set logfile ({@link error_logger:logfile/1})
+%% @TODO add custom error sink ({@link gen_event:add_handler/2})
 %% @TODO configure and start lager
 
 %% @doc Setup logging.
