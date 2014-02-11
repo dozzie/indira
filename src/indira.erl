@@ -16,7 +16,7 @@
 -module(indira).
 
 %% API for escript
--export([set_environment/1, set_option/3]).
+-export([set_environment/1, set_option/3, load_app_config/1]).
 -export([sleep_forever/0]).
 -export([start_rec/1, start_rec/2]).
 -export([load_plugins_dir/1]).
@@ -55,7 +55,7 @@ set_option(App, Option, Value) ->
 
 %% @doc Load application configuration file (suitable for `-config' VM
 %%   option).
-load_app_config(Config) ->
+load_app_config(_File) ->
   'TODO'.
 
 %% }}}
