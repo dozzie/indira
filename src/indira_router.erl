@@ -144,8 +144,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%%---------------------------------------------------------------------------
 
 %% @doc Send command to Indira router.
-%%   Response to the command will be passed as a message to the caller of this
-%%   function.
+%%   The process calling this function will get the response as a message.
 %%
 %%   Function may fail on syntax error, `{error,Reason}' will be returned in
 %%   such case. The caller is responsible for logging an error (possibly with
@@ -157,8 +156,7 @@ command(Indira, Line) ->
   gen_server:call(Indira, {command, self(), Line}).
 
 %% @doc Send command to Indira router.
-%%   Response to the command will be passed as a message to the caller of this
-%%   function.
+%%   The process calling this function will get the response as a message.
 %%
 %%   Function may fail on syntax error, `{error,Reason}' will be returned in
 %%   such case. The caller is responsible for logging an error (possibly with

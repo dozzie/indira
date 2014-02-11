@@ -202,16 +202,14 @@ distributed(Name, NameType, Cookie) ->
 %% send command line to router {{{
 
 %% @doc Send command to Indira router.
-%%   Response to the command will be passed as a message to the caller of this
-%%   function.
+%%   The process calling this function will get the response as a message.
 %%
 %% @see indira_router:command/2
 command(Indira, Line) ->
   indira_router:command(Indira, Line).
 
 %% @doc Send command to Indira router.
-%%   Response to the command will be passed as a message to the caller of this
-%%   function.
+%%   The process calling this function will get the response as a message.
 %%
 %%   `RoutingKey' is an additional information to tell apart between multiple
 %%   clients and will be included in command reply message.
