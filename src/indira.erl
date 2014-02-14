@@ -24,7 +24,7 @@
 -export([load_plugins_dir/1]).
 -export([write_pidfile/1]).
 -export([chdir/0, chdir/1]).
--export([setup_logging/1]).
+-export([setup_logging/2]).
 -export([distributed/1]).
 -export([distributed/2]).
 -export([distributed/3]).
@@ -32,6 +32,121 @@
 %% API for listeners
 -export([command/2, command/3]).
 -export([log_info/2, log_error/3, log_critical/3]).
+
+%%%---------------------------------------------------------------------------
+%%% types
+%%%---------------------------------------------------------------------------
+
+%%----------------------------------------------------------
+%% log_destination() {{{
+
+%% @type log_destination() =
+%%     stdout | stderr
+%%   | {stdout, color|colour} | {stderr, color|colour}
+%%   | {file, Filename :: string()}
+%%   | syslog
+%%   | {syslog, DestHost :: inet:hostname() | inet:ip_address()}
+%%   | {syslog, {Host :: inet:hostname() | inet:ip_address(),
+%%                Port :: integer()}}
+%%   | lager
+%%   | {lager, Config :: term()}
+%%   | {gen_event, Module :: term(), Args :: term()}.
+%%
+%% Log destination description.
+%% <ul>
+%%   <li>`stdout' and `stderr' prints events on screen (`{StdX,colour}'
+%%       additionally colours warnings and errors)</li>
+%%   <li>`{file,Filename}' writes events to log file</li>
+%%   <li>`syslog' sends events to local syslog daemon</li>
+%%   <li>`{syslog,Host}' and `{syslog,{Host,Port}}' send logs to remote host
+%%       using syslog protocol (UDP-based)</li>
+%%   <li>`lager' starts <a href="https://github.com/basho/lager">Lager</a>
+%%       application; Lager must be configured beforehand</li>
+%%   <li>`{lager,Config}' starts Lager, but also configures it by calling
+%%       `application:set_env(lager, handlers, Config)'</li>
+%%   <li>`{gen_event,Module,Args}' adds custom module of {@link gen_event}
+%%       behaviour to `error_logger' process. Remember to handle all messages
+%%       specified in {@link error_logger} module documentation
+%%       (here's {@link error_logger_event(). local copy}).</li>
+%% </ul>
+
+-type log_destination() ::
+    stdout | stderr
+  | {stdout, color|colour} | {stderr, color|colour}
+  | {file, Filename :: string()} % what about log rotation?
+  | syslog
+  | {syslog, DestHost :: atom() | string() | inet:ip_address()}
+  | {syslog, {Host :: atom() | string() | inet:ip_address(),
+               Port :: integer()}}
+  | lager
+  | {lager, Config :: term()}
+  | {gen_event, Module :: term(), Args :: term()}.
+
+%% }}}
+%%----------------------------------------------------------
+%% error_logger_event() {{{
+
+%% @type error_logger_event() =
+%%     {info_msg | warning_msg | error,
+%%       GroupLeader :: pid(),
+%%       {EventOrigin :: pid(), Format :: string() | atom(), Data :: list()}}
+%%   | {info_report | warning_report | error_report,
+%%       {EventOrigin :: pid(), Type :: atom(), Report :: term()}}.
+%%
+%% Event structure extracted from {@link error_logger} documentation.
+%%
+%% Note that while {@link error_logger:info_msg/1} and
+%% {@link error_logger:warning_msg/1} produce `*_msg' events, 
+%% {@link error_logger:error_msg/1} produces just `error'.
+%% `error_report' keeps the convention, however.
+%%
+%% `EventOrigin' is the process that generated event (that is, called
+%% {@link error_logger:info_msg/1} or its companion).
+%%
+%% `Type' is a type of report. Some typical values include:
+%% <ul>
+%%   <li>`std_info', `std_warning', `std_error' for
+%%       {@link error_logger:info_report/1},
+%%       {@link error_logger:warning_report/1},
+%%       {@link error_logger:error_report/1}</li>
+%%   <li>`progress' for application start report</li>
+%%   <li>`supervisor_report' for errors from supervisor</li>
+%% </ul>
+%% `Type' in error report can be specified by calling
+%% {@link error_logger:error_report/2} (and similar thing for info and
+%% warning).
+
+-type error_logger_event() ::
+    {info_msg | warning_msg | error,
+      GroupLeader :: pid(),
+      {EventOrigin :: pid(), Format :: string() | atom(), Data :: list()}}
+  | {info_report | warning_report | error_report,
+      {EventOrigin :: pid(), Type :: atom(), Report :: term()}}.
+
+%% }}}
+%%----------------------------------------------------------
+%% event_filter_fun() {{{
+
+%% @type event_filter_fun() =
+%%   fun(
+%%     (error_logger_event()) ->
+%%       ok | {replace, error_logger_event()} | ignore
+%%   ).
+%%
+%% Function that filters events before entering log handler. The function can
+%% decide to pass the event unchanged, to alter the event or to ignore it
+%% altogether.
+%%
+%% This function <i>is not</i> intended for heavy processing, like summarizing
+%% events or compressing them to a single complex event. It should be as fast
+%% as possible, and processing multiple events should be done by external
+%% tools.
+
+-type event_filter_fun() ::
+  fun((error_logger_event()) -> ok | {replace, error_logger_event()} | ignore).
+
+%% }}}
+%%----------------------------------------------------------
 
 %%%---------------------------------------------------------------------------
 %%% API for escript
@@ -157,15 +272,28 @@ chdir(Directory) ->
 %%----------------------------------------------------------
 %% setup logging {{{
 
-%% @TODO redirect `standard_io' (group leader)
-%% @TODO redirect `standard_error'
-%% @TODO disable TTY logging ({@link error_logger:tty/1})
-%% @TODO set logfile ({@link error_logger:logfile/1})
-%% @TODO add custom error sink ({@link gen_event:add_handler/2})
-%% @TODO configure and start lager
-
 %% @doc Setup logging.
-setup_logging(_Options) ->
+%%   In addition to setting up logging sinks, Indira can redirect
+%%   `standard_io' to {@link error_logger} (option `redirect_stdio').
+%%
+%%   `DaemonName' is a name of this daemon. It's used for shared logging
+%%   infrastructure, like syslog.
+%%
+%%   <b>NOTE</b>: Indira assumes here that a single Erlang VM only hosts
+%%   a single daemon, that is, there is one main function of the VM instance.
+%%   There could be other functions, but they're considered auxiliary.
+%%
+%% @spec setup_logging(atom() | string(),
+%%                     [redirect_stdio | log_destination()
+%%                       | {filter, event_filter_fun(), log_destination()}]) ->
+%%   any()
+
+-spec setup_logging(atom() | string(),
+                    [redirect_stdio | log_destination()
+                      | {filter, event_filter_fun(), log_destination()}]) ->
+  any().
+
+setup_logging(_DaemonName, _Options) ->
   'TODO'.
 
 %% }}}
