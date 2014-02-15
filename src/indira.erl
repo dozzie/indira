@@ -256,7 +256,7 @@ write_pidfile(undefined) ->
   ok;
 write_pidfile(Filename) ->
   Pid = iolist_to_binary([os:getpid(), "\n"]),
-  file:write_file(Filename, Pid).
+  ok = file:write_file(Filename, Pid).
 
 %% }}}
 %%----------------------------------------------------------
