@@ -210,7 +210,7 @@ start_rec(App, StartType) ->
   case application:start(App, StartType) of
     {error, {not_started, App1}} ->
       ok = start_rec(App1, StartType),
-      start_rec(App);
+      start_rec(App, StartType);
     {error, {already_started, App}} ->
       ok;
     {error, _Any} = Error ->
