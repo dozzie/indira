@@ -135,7 +135,8 @@
 %%
 %% Function that filters events before entering log handler. The function can
 %% decide to pass the event unchanged, to alter the event or to ignore it
-%% altogether.
+%% altogether. The decision concerns just the log destination attached to this
+%% filter. All the other destinations will process the original event.
 %%
 %% This function <i>is not</i> intended for heavy processing, like summarizing
 %% events or compressing them to a single complex event. It should be as fast
@@ -183,6 +184,7 @@ load_app_config(_File) ->
 %% @doc Sleep forever. Function intended for use in `main()' function in
 %%   `escript' code.
 sleep_forever() ->
+  % FIXME: no code release on Indira code upgrade
   receive
     % ignore all the messages (none should arrive, anyway)
     _Any -> sleep_forever()

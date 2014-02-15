@@ -37,6 +37,10 @@
 %%%   with client) or {@link indira:log_critical/3} (e.g. in case of socket
 %%%   setup error).
 %%%
+%%%   === Line format ===
+%%%
+%%%   <b>TODO</b>: describe me.
+%%%
 %%%   == Entry point module API ==
 %%%
 %%%   `Module:supervision_child_spec/2' gets two arguments: Indira router
