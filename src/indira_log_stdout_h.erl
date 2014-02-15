@@ -22,6 +22,12 @@
 %%%---------------------------------------------------------------------------
 
 %% @doc Initialize event handler.
+%%   `Args' is a proplist that can contain `colour' or `color' boolean key. If
+%%   it's `true', console output will be coloured (default is `false').
+%%
+%% @spec init([{Name :: atom(), Value :: term()} | atom()]) ->
+%%   {ok, term()}
+
 init(Args) ->
   Colour = proplists:get_bool(colour, Args) orelse
            proplists:get_bool(color, Args),
