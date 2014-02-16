@@ -208,8 +208,8 @@ start_rec(App) ->
 %% @see application:start/2
 start_rec(App, StartType) ->
   case application:start(App, StartType) of
-    {error, {not_started, App1}} ->
-      ok = start_rec(App1, StartType),
+    {error, {not_started, AppDep}} ->
+      ok = start_rec(AppDep, StartType),
       start_rec(App, StartType);
     {error, {already_started, App}} ->
       ok;
