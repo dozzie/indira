@@ -253,6 +253,12 @@ chdir(Directory) ->
 %%   `DaemonName' is a name of this daemon. It's used for shared logging
 %%   infrastructure, like syslog.
 %%
+%%   Indira tries to start all the logging channels. Errors, if any, are
+%%   reported at the very end by returning `{error,Errors}' tuple with list
+%%   of problems. The errors will be also logged to {@link error_logger}.
+%%   Logging errors are not considered critical by Indira. User can, of
+%%   course, make them critical by appropriately treating `{error,_}' result.
+%%
 %%   <b>NOTE</b>: Indira assumes here that a single Erlang VM only hosts
 %%   a single daemon, that is, there is one main function of the VM instance.
 %%   There could be other functions, but they're considered auxiliary.
@@ -260,12 +266,12 @@ chdir(Directory) ->
 %% @spec setup_logging(atom() | string(),
 %%                     [redirect_stdio | log_destination()
 %%                       | {filter, event_filter_fun(), log_destination()}]) ->
-%%   any()
+%%   ok | {error, [Reasons]}
 
 -spec setup_logging(atom() | string(),
                     [redirect_stdio | log_destination()
                       | {filter, event_filter_fun(), log_destination()}]) ->
-  any().
+  ok | {error, [term()]}.
 
 setup_logging(DaemonName, Options) when is_atom(DaemonName) ->
   setup_logging(atom_to_list(DaemonName), Options);
@@ -277,6 +283,8 @@ setup_logging(DaemonName, Options) ->
 
   Results =
     [register_log_dest(DaemonName, D) || D <- Options, D =/= redirect_stdio],
+
+  % TODO: handle `redirect_stdio' option
 
   case [E || {error,E} <- Results] of
     [] ->
