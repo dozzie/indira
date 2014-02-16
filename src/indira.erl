@@ -296,8 +296,81 @@ chdir(Directory) ->
                       | {filter, event_filter_fun(), log_destination()}]) ->
   any().
 
-setup_logging(_DaemonName, _Options) ->
-  'TODO'.
+setup_logging(DaemonName, Options) when is_atom(DaemonName) ->
+  setup_logging(atom_to_list(DaemonName), Options);
+
+setup_logging(DaemonName, Options) ->
+  % clear all the handlers (except error_logger)
+  [error_logger:delete_report_handler(H) ||
+    H <- gen_event:which_handlers(error_logger), H =/= error_logger],
+
+  Results =
+    [register_log_dest(DaemonName, D) || D <- Options, D =/= redirect_stdio],
+
+  case [E || {error,E} <- Results] of
+    [] ->
+      ok;
+    Errors ->
+      log_error(setup_logging, Errors),
+      {error,Errors}
+  end.
+
+%% @doc Register an event handler in {@link error_logger}.
+
+-spec register_log_dest(string(),
+  {filter, event_filter_fun(), log_destination()} | log_destination()) ->
+  ok | {error, term()}.
+
+%% filter + log destination
+register_log_dest(_DaemonName, {filter, _FilterFunc, _LogDest}) ->
+  {error, {not_implemented,filter}}; % TODO
+
+%% stdout/stderr log destination
+register_log_dest(_DaemonName, stdout) ->
+  Options = [{iodev, user}],
+  error_logger:add_report_handler(indira_log_tty_h, Options);
+register_log_dest(_DaemonName, stderr) ->
+  Options = [{iodev, standard_error}],
+  error_logger:add_report_handler(indira_log_tty_h, Options);
+register_log_dest(_DaemonName, {stdout,colour}) ->
+  Options = [{iodev, user}, {colour, true}],
+  error_logger:add_report_handler(indira_log_tty_h, Options);
+register_log_dest(_DaemonName, {stderr,colour}) ->
+  Options = [{iodev, standard_error}, {colour, true}],
+  error_logger:add_report_handler(indira_log_tty_h, Options);
+register_log_dest(DaemonName, {stdout,color}) ->
+  register_log_dest(DaemonName, {stdout,colour});
+register_log_dest(DaemonName, {stderr,color}) ->
+  register_log_dest(DaemonName, {stderr,colour});
+
+%% file log destination
+register_log_dest(_DaemonName, {file, _Filename}) ->
+  {error, {not_implemented,file}}; % TODO
+
+%% syslog log destination
+register_log_dest(_DaemonName, syslog) ->
+  {error, {not_implemented,syslog}}; % TODO
+register_log_dest(_DaemonName, {syslog, _Destination}) ->
+  {error, {not_implemented,syslog}}; % TODO
+
+%% lager
+register_log_dest(_DaemonName, lager) ->
+  % this is enough (lager should already be configured)
+  start_rec(lager);
+register_log_dest(_DaemonName, {lager, LagerHandlers}) ->
+  case application:load(lager) of
+    ok ->
+      application:set_env(lager, handlers, LagerHandlers),
+      start_rec(lager);
+    {error,{already_loaded,lager}} ->
+      application:set_env(lager, handlers, LagerHandlers),
+      start_rec(lager);
+    {error,_Reason} = Error ->
+      Error
+  end;
+
+register_log_dest(_DaemonName, {gen_event, Module, Args}) ->
+  error_logger:add_report_handler(Module, Args).
 
 %% }}}
 %%----------------------------------------------------------
