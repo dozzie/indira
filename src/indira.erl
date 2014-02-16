@@ -174,8 +174,45 @@ set_option(App, Option, Value) ->
 
 %% @doc Load application configuration file (suitable for `-config' VM
 %%   option).
-load_app_config(_File) ->
-  'TODO'.
+%%
+%%   Note that <i>unloading</i> an application mentioned in the file loaded by
+%%   this function may make the configuration to be lost. Please don't unload
+%%   applications.
+
+-spec load_app_config(string()) ->
+  ok | {error, term()}.
+
+load_app_config(File) ->
+  case file:consult(File) of
+    % AppConfigList :: [ {AppName :: atom(), [ {K :: atom(), V :: term()} ]} ]
+    {ok, [AppConfigList]} ->
+      load_app_config_list(AppConfigList);
+    {ok, _} ->
+      {error, badformat};
+    {error, _Reason} = Error ->
+      Error
+  end.
+
+%% @doc Load applications and set their config variables according to the
+%%   `-config' list.
+
+-spec load_app_config_list([ {atom(), [{atom(), term()}]} ]) ->
+  ok | {error, term()}.
+
+load_app_config_list([] = _AppConfigList) ->
+  ok;
+load_app_config_list([{AppName, Config} | Rest]) ->
+  case application:load(AppName) of
+    ok ->
+      [application:set_env(AppName, K, V) || {K,V} <- Config],
+      load_app_config_list(Rest);
+    {error, {already_loaded, AppName}} ->
+      [application:set_env(AppName, K, V) || {K,V} <- Config],
+      load_app_config_list(Rest);
+    {error, _Reason} = Error ->
+      % stop here
+      Error
+  end.
 
 %% }}}
 %%----------------------------------------------------------
