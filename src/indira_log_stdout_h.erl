@@ -14,6 +14,7 @@
 -export([code_change/3]).
 
 -record(opts, {
+  iodev, % 'group_leader' | 'user' | 'standard_error' | pid() to I/O server
   colour = false
 }).
 
@@ -31,7 +32,8 @@
 init(Args) ->
   Colour = proplists:get_bool(colour, Args) orelse
            proplists:get_bool(color, Args),
-  {ok, #opts{colour = Colour}}.
+  IODev = proplists:get_value(iodev, Args, group_leader),
+  {ok, #opts{iodev = IODev, colour = Colour}}.
 
 %% @doc Clean up after event handler.
 terminate(_Arg, _Opts) ->
@@ -46,24 +48,30 @@ terminate(_Arg, _Opts) ->
 %%   Type :: std_error | std_warning | std_info | term() -- type of `*_report'
 
 handle_event({error, GL, {Pid, Format, Data}} = _Event, Opts) ->
-  error(GL, Pid, message, io_lib:format(Format, Data), Opts),
+  Target = target(GL, Opts),
+  error(Target, Pid, message, io_lib:format(Format, Data), Opts),
   {ok, Opts};
 handle_event({error_report, GL, {Pid, Type, Data}} = _Event, Opts) ->
-  error(GL, Pid, Type, format_report(Data), Opts),
+  Target = target(GL, Opts),
+  error(Target, Pid, Type, format_report(Data), Opts),
   {ok, Opts};
 
 handle_event({warning_msg, GL, {Pid, Format, Data}} = _Event, Opts) ->
-  warning(GL, Pid, message, io_lib:format(Format, Data), Opts),
+  Target = target(GL, Opts),
+  warning(Target, Pid, message, io_lib:format(Format, Data), Opts),
   {ok, Opts};
 handle_event({warning_report, GL, {Pid, Type, Data}} = _Event, Opts) ->
-  warning(GL, Pid, Type, format_report(Data), Opts),
+  Target = target(GL, Opts),
+  warning(Target, Pid, Type, format_report(Data), Opts),
   {ok, Opts};
 
 handle_event({info_msg, GL, {Pid, Format, Data}} = _Event, Opts) ->
-  info(GL, Pid, message, io_lib:format(Format, Data), Opts),
+  Target = target(GL, Opts),
+  info(Target, Pid, message, io_lib:format(Format, Data), Opts),
   {ok, Opts};
 handle_event({info_report, GL, {Pid, Type, Data}} = _Event, Opts) ->
-  info(GL, Pid, Type, format_report(Data), Opts),
+  Target = target(GL, Opts),
+  info(Target, Pid, Type, format_report(Data), Opts),
   {ok, Opts};
 
 handle_event(_Event, Opts) ->
@@ -117,6 +125,14 @@ header(Pid, LogLevel, LogType, _Opts) ->
   io_lib:format("~p ~p[~p]: ", [Pid, LogLevel, LogType]).
 
 %%%---------------------------------------------------------------------------
+
+%% @doc Return address of target process based on options and group leader
+%%   PID.
+
+target(GroupLeader, #opts{iodev = group_leader} = _Opts) ->
+  GroupLeader;
+target(_GroupLeader, #opts{iodev = Target} = _Opts) ->
+  Target.
 
 %% @doc Format report as a single line.
 %%   If it's a char list, it's left untouched. Otherwise, it's formatted as
