@@ -31,7 +31,8 @@
 
 %% API for listeners
 -export([command/2, command/3]).
--export([log_info/2, log_error/3, log_critical/3]).
+-export([log_info/2, log_error/2, log_error/3,
+         log_critical/2, log_critical/3]).
 
 %%%---------------------------------------------------------------------------
 %%% types
@@ -363,6 +364,8 @@ log_info(InfoType, Context) ->
 %% @doc Send error report about an error to {@link error_logger}.
 %%   The report is formatted uniformly for Indira.
 %%
+%%   This function is intended for use with single `{error,Reason}' tuple.
+%%
 %%   Such error is something that generally shouldn't happen, but if it does,
 %%   it has limited scope (e.g. command line parse error for a single client).
 log_error(ErrorType, ErrorReason, Context) ->
@@ -370,14 +373,37 @@ log_error(ErrorType, ErrorReason, Context) ->
     [{indira_error, ErrorType}, {error, ErrorReason} | Context]
   ).
 
+%% @doc Send error report about an error to {@link error_logger}.
+%%   The report is formatted uniformly for Indira.
+%%
+%%   This function is intended for use when no single `{error,Reason}' tuple
+%%   is present (e.g. when multiple errors occurred).
+%%
+%%   Such error is something that generally shouldn't happen, but if it does,
+%%   it has limited scope (e.g. command line parse error for a single client).
+log_error(ErrorType, Context) ->
+  error_logger:warning_report([{indira_error, ErrorType} | Context]).
+
 %% @doc Send log report about severe error to {@link error_logger}.
 %%   The report is formatted uniformly for Indira.
+%%
+%%   This function is intended for use with single `{error,Reason}' tuple.
 %%
 %%   For severe errors, like inability to listen on a specified port.
 log_critical(ErrorType, ErrorReason, Context) ->
   error_logger:error_report(
     [{indira_error, ErrorType}, {error, ErrorReason} | Context]
   ).
+
+%% @doc Send log report about severe error to {@link error_logger}.
+%%   The report is formatted uniformly for Indira.
+%%
+%%   This function is intended for use when no single `{error,Reason}' tuple
+%%   is present (e.g. when multiple errors occurred).
+%%
+%%   For severe errors, like inability to listen on a specified port.
+log_critical(ErrorType, Context) ->
+  error_logger:error_report([{indira_error, ErrorType} | Context]).
 
 %% }}}
 %%----------------------------------------------------------
