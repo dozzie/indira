@@ -79,11 +79,14 @@ handle_request({put_chars, _Enc, Characters}) ->
   io:put_chars(["\e[32;1m", Characters, "\e[m"]),
   ok;
 handle_request({put_chars, Enc, Mod, Func, Args}) ->
-  case apply(Mod, Func, Args) of
+  try apply(Mod, Func, Args) of
     Characters when is_list(Characters) or is_binary(Characters) ->
       handle_request({put_chars, Enc, Characters});
     _Any ->
       {error, badarg}
+  catch
+    error:Error ->
+      {error, Error}
   end;
 
 %% write requests (Erlang <R15B)
