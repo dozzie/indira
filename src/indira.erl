@@ -21,7 +21,6 @@
 -export([set_environment/1, set_option/3, load_app_config/1]).
 -export([sleep_forever/0]).
 -export([start_rec/1, start_rec/2]).
--export([load_plugins_dir/1]).
 -export([write_pidfile/1]).
 -export([chdir/0, chdir/1]).
 -export([setup_logging/2]).
@@ -219,34 +218,6 @@ start_rec(App, StartType) ->
     ok ->
       ok
   end.
-
-%% }}}
-%%----------------------------------------------------------
-%% load plugins (BEAM files) from directory {{{
-
-%% @TODO Compile + load function.
-%% @TODO Load plugins from multiple directories.
-%% @TODO Reload plugins from multiple directories.
-%%   Hint:
-%%   ```
-%%   [T || {_,F} = T <- code:all_loaded(), is_list(F), lists:prefix(P,F)]
-%%   '''
-%%   {@link code:purge/1}, {@link code:soft_purge/1}
-%% @TODO Problem with reload: somebody wants to run something between purge
-%%   and load (race condition).
-
-%% @doc Load <tt>*.beam</tt> files from specified directory.
-load_plugins_dir(Directory) ->
-  Files = filelib:fold_files(
-    Directory, "\\.beam$", false,
-    fun(F, Acc) ->
-      AF = filename:absname(F),
-      CF = filename:rootname(AF),
-      {module, Mod} = code:load_abs(CF),
-      [{Mod, AF} | Acc]
-    end, []
-  ),
-  Files.
 
 %% }}}
 %%----------------------------------------------------------
