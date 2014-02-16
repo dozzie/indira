@@ -4,7 +4,7 @@
 %%% @end
 %%%---------------------------------------------------------------------------
 
--module(indira_log_stdout_h).
+-module(indira_log_tty_h).
 
 -behaviour(gen_event).
 
