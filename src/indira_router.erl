@@ -113,21 +113,20 @@ handle_info({spawn_listeners, Parent} = _Message, State) ->
 
 handle_info({result, ReplyTo, Reply} = _Message, State) ->
   % send result back to listener
-  case indira_proto_serializer:encode(Reply) of
+  ReplyLine = case indira_proto_serializer:encode(Reply) of
     {ok, JSON} ->
-      case ReplyTo of
-        {Pid, Hint} -> Pid ! {result, Hint, JSON};
-        _Pid -> ReplyTo ! {result, JSON}
-      end;
+      JSON;
     {error, Reason} ->
       % command executor sent an invalid structure
       % I can't give more readable client's address than `ReplyTo', but this
       % should happen rarely, anyway
       indira:log_error(bad_command_reply, Reason,
                        [{reply, Reply}, {client_route, ReplyTo}]),
-      % TODO: maybe send an error message to ReplyTo? like,
-      % `{result_error,Reason}'? (update `gen_indira_listener' doc)
-      ignore
+      <<"bad result">>
+  end,
+  case ReplyTo of
+    {Pid, Hint} -> Pid ! {result, Hint, ReplyLine};
+    _Pid -> ReplyTo ! {result, ReplyLine}
   end,
   {noreply, State};
 
