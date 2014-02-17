@@ -2,12 +2,174 @@
 %%% @doc
 %%%   Indira main API.
 %%%
-%%% @TODO Describe how does environment config ({@link application:get_env/2})
-%%%   look like (`application:get_env(indira, listen)' is a list of tuples
-%%%   `{Module, ListenerArg}').
-%%% @TODO Describe communication protocol between Indira and command executor.
-%%%   Remember that command executor should log commands, as Indira doesn't do
-%%%   that.
+%%%   This module contains functions to be called from `escript' script and
+%%%   utility functions for {@link gen_indira_listener. listeners}. It also
+%%%   documents how to configure Indira ({@section Indira configuration}) and
+%%%   the protocol to communicate with {@section Command executor}.
+%%%
+%%%   == Indira configuration ==
+%%%
+%%%   Indira uses two configuration keys ({@link application:get_env/2}):
+%%%   <i>listen</i> and <i>commander</i>.
+%%%
+%%%   The value of <i>commander</i> is a name (atom) under which your
+%%%   {@section Command executor} will be registered. If you configure Indira
+%%%   with {@link application:set_env/3}, you can provide raw PID, but it's
+%%%   generally not a good idea (think of dying processes).
+%%%
+%%%   The value of <i>listen</i> is a list of pairs `{Mod,Args}'. `Mod' is
+%%%   a name (atom) of module which is considered to be listener's entry
+%%%   point. `Args' is an argument passed to `Mod:supervision_child_spec/2'.
+%%%   For more details see {@link gen_indira_listener}.
+%%%
+%%%   A file passed to <i>-config</i> VM option could look like this:
+%%%   ```
+%%%   [{indira, [
+%%%       {listen, [
+%%%         {indira_tcp, {"localhost", 16667}},
+%%%         {indira_unix, "/var/run/my_app.sock"}
+%%%       ]},
+%%%       {commander, my_app_command}
+%%%     ]},
+%%%     % ...
+%%%   ].
+%%%   '''
+%%%   The config assumes that `indira_unix' module is available (it's not
+%%%   supplied with Indira release).
+%%%
+%%%   == Command executor ==
+%%%
+%%%   Command executor is a process that receives messages of following
+%%%   structure: `{command,ReplyTo,ChannelID,Command}'. It should reply with
+%%%   tuple `{result,ChannelID,Reply}' to `ReplyTo' process.
+%%%
+%%%   Data in `Reply' should be jsx-like structured. Short reference is here:
+%%%   {@section Data structure (jsx)}.
+%%%
+%%%   Data in `Command' has either jsx-like structure if the command was
+%%%   encoded as JSON ({@section JSON command}) or is a tuple if the command
+%%%   was a {@section simple command}.
+%%%
+%%%   Command executor is responsible for logging commands it has received.
+%%%   It's highly recommended to log the commands being executed in the
+%%%   application.
+%%%
+%%%   === Example executor ===
+%%%
+%%%   This is the simplest (and the dumbest) command executor:
+%%%   ```
+%%%   start_command_executor() ->
+%%%     spawn(fun() ->
+%%%       register(my_app_command, self()),
+%%%       command_executor()
+%%%     end).
+%%%
+%%%   command_executor() ->
+%%%     receive
+%%%       {command, ReplyTo, ChannelID, Command} ->
+%%%         error_logger:info_report(my_app_command, [
+%%%           {message, "got a command"},
+%%%           {command, Command}, {channel, ChannelID}
+%%%         ]),
+%%%         ReplyTo ! {result, ChannelID, ok},
+%%%         command_executor();
+%%%       _Any ->
+%%%         % ignore
+%%%         command_executor()
+%%%     end.
+%%%   '''
+%%%
+%%%   For real world applications, the executor will probably implement
+%%%   {@link gen_server} behaviour and be started as a part of application's
+%%%   supervision tree.
+%%%
+%%%   Note: when handling commands, remember to add support for unrecognized
+%%%   commands. You don't want your command executor crashed when talking to
+%%%   buggy client.
+%%%
+%%%   == Communication protocol ==
+%%%
+%%%   The protocol to communicate with the world outside of Erlang VM is
+%%%   line-based. There can be various ways of delivering the line (e.g. HTTP
+%%%   POST); they won't be covered here. Instead, this section focuses on the
+%%%   format of the line itself.
+%%%
+%%%   Request line is either a simple command or JSON document.
+%%%
+%%%   When command executor sent something that couldn't be serialized, the
+%%%   response line will be "`bad result'". Otherwise, the response will
+%%%   always be single-line JSON document.
+%%%
+%%%   === simple command ===
+%%%
+%%%   A simple command line is composed of a word denoting the command and
+%%%   list of options (possibly empty) separated with spaces. Option is a word
+%%%   or assignment. Assignment is composed of word, "`='" sign and a word,
+%%%   JSON string or JSON number. Word is a sequence of letters, digits,
+%%%   underscore, hyphen and period, beginning with a letter or underscore.
+%%%
+%%%   Some examples:
+%%%   ```
+%%%   command_word
+%%%   also.a.word this_is_an_option
+%%%   some_cmd option=value option2="spaces and\nnewlines allowed in strings"
+%%%   '''
+%%%
+%%%   Simple command is sent to command executor as a tuple of
+%%%   `{<<"command">>, Options}', where `Options' is a list (possibly empty)
+%%%   of binaries (word option) or pairs `{Name,Value}' (assignment; `Name'
+%%%   will be a binary, `Value' will be a binary, integer or float, depending
+%%%   on the assigned value).
+%%%
+%%%   Commands from example above will be passed to command executor as:
+%%%   ```
+%%%   {<<"command_word">>, []}.
+%%%   {<<"also.a.word">>, [<<"this_is_an_option">>]}.
+%%%   {<<"some_cmd">>, [
+%%%     {<<"option">>, <<"value">>},
+%%%     {<<"option2">>, <<"spaces and\nnewlines allowed in strings">>}
+%%%   ]}.
+%%%   '''
+%%%
+%%%   === JSON command ===
+%%%
+%%%   JSON command consists of a valid single-line JSON document.
+%%%
+%%%   Erlang representation is based on jsx.
+%%%   <ul>
+%%%     <li><i>object</i> is encoded as `[{}]' (empty object) or a list of
+%%%         `{Key,Value}' pairs, where `Key' is always a binary and `Value' is
+%%%         JSON value</li>
+%%%     <li><i>array</i> is encoded as a list</li>
+%%%     <li><i>string</i> is encoded as a binary (UTF-8 encoding)</li>
+%%%     <li><i>number</i> is encoded as integer (if possible) or float</li>
+%%%     <li>`true', `false' and `null' are encoded as corresponding atoms</li>
+%%%   </ul>
+%%%
+%%%   === Data structure (jsx) ===
+%%%
+%%%   Serializable data is:
+%%%   <ul>
+%%%     <li>`[{}]', encoded as empty JSON object</li>
+%%%     <li>`[{K,V}, ...]', encoded as JSON object; `V' can be any
+%%%         serializable data, `K' is an atom, string (list) or a binary</li>
+%%%     <li>`[]', `[V,...]', encoded as a JSON array; `V' can be any
+%%%         serializable data</li>
+%%%     <li>integer is encoded as a number (no periods or "e" letters)</li>
+%%%     <li>float is encoded as a number (containing period, "e", or
+%%%         both)</li>
+%%%     <li>atoms `null', `true' and `false' are encoded as corresponding JSON
+%%%         values</li>
+%%%     <li>atom other than above-mentioned three is encoded as a string</li>
+%%%     <li>binary is encoded as a string</li>
+%%%   </ul>
+%%%   Note that Erlang strings are generally recognized as arrays of integers,
+%%%   except for being a key in proplist.
+%%%
+%%%   Note also that tuples alone are not allowed. They can only compose
+%%%   proplists that will be serialized to JSON object.
+%%%
+%%% @TODO API for client command line utilities.
 %%%
 %%% @see indira_tcp
 %%% @see indira_udp
@@ -96,7 +258,7 @@
 %% Event structure extracted from {@link error_logger} documentation.
 %%
 %% Note that while {@link error_logger:info_msg/1} and
-%% {@link error_logger:warning_msg/1} produce `*_msg' events, 
+%% {@link error_logger:warning_msg/1} produce `*_msg' events,
 %% {@link error_logger:error_msg/1} produces just `error'.
 %% `error_report' keeps the convention, however.
 %%
@@ -172,7 +334,7 @@ set_option(App, Option, Value) ->
   end,
   application:set_env(App, Option, Value).
 
-%% @doc Load application configuration file (suitable for `-config' VM
+%% @doc Load application configuration file (suitable for <i>-config</i> VM
 %%   option).
 %%
 %%   Note that <i>unloading</i> an application mentioned in the file loaded by
@@ -194,7 +356,7 @@ load_app_config(File) ->
   end.
 
 %% @doc Load applications and set their config variables according to the
-%%   `-config' list.
+%%   <i>-config</i> list.
 
 -spec load_app_config_list([ {atom(), [{atom(), term()}]} ]) ->
   ok | {error, term()}.

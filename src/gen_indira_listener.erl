@@ -39,7 +39,8 @@
 %%%
 %%%   === Line format ===
 %%%
-%%%   <b>TODO</b>: describe me.
+%%%   Formats of the request and response lines are documented in
+%%%   {@link indira} module.
 %%%
 %%%   == Entry point module API ==
 %%%
@@ -50,8 +51,8 @@
 %%%
 %%%   `Module:supervision_child_spec/2' is supposed to return `{MFA, Type}',
 %%%   where `Type' is `worker' or `supervisor' and `MFA' is `{Module,
-%%%   Function, Args}' suitable for {@link erlang:apply/3}. Semantics the same
-%%%   as `StartFunc' in child specification in supervisor.
+%%%   Function, Args}' suitable for {@link erlang:apply/3}. Semantics are the
+%%%   same as `StartFunc' in child specification in supervisor.
 %%%
 %%%   Typically, for module `foo' it would be:
 %%%   <ul>
@@ -60,6 +61,9 @@
 %%%     <li>`{{foo_sup, start_link, []}, supervisor}' for
 %%%         `foo_sup:start_link/0' that runs whole supervision tree</li>
 %%%   </ul>
+%%%   Note that the definitions above don't pass Indira router address to
+%%%   spawned processes. The address most probably should be passed in `Args'
+%%%   (which equals to `[]' in above examples).
 %%%
 %%% @end
 %%%---------------------------------------------------------------------------
