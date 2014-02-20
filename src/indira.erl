@@ -423,6 +423,7 @@ start_rec(App, StartType) ->
 %% write pidfile {{{
 
 %% @doc Write PID file.
+%% @TODO Remove PID file when shutting down.
 write_pidfile(undefined) ->
   ok;
 write_pidfile(Filename) ->
