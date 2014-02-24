@@ -54,6 +54,16 @@
 %%%   It's highly recommended to log the commands being executed in the
 %%%   application.
 %%%
+%%%   Some proposals for commands:
+%%%   <ul>
+%%%     <li><i>stop</i>, shutdown the daemon (initscript)</li>
+%%%     <li><i>is daemon running?</i>, wait for daemon to start
+%%%         (initscript)</li>
+%%%     <li><i>reload</i>, reload configuration stored in a file</li>
+%%%     <li><i>netconfig</i>, setup distributed Erlang (epmd, cookie and
+%%%         <i>-(s)name</i></li>
+%%%   </ul>
+%%%
 %%%   === Example executor ===
 %%%
 %%%   This is the simplest (and the dumbest) command executor:
@@ -170,6 +180,9 @@
 %%%   proplists that will be serialized to JSON object.
 %%%
 %%% @TODO API for client command line utilities.
+%%% @TODO Notice if no listeners defined.
+%%% @TODO Channel types defined by operator (to differentiate between unix
+%%%   socket, SSL and TCP).
 %%%
 %%% @see indira_tcp
 %%% @see indira_udp
