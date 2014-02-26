@@ -1,0 +1,52 @@
+== Indira, Mother of D(a)emons ==
+
+Indira is an application for turning Erlang applications into unix daemons
+with as little effort as possible.
+
+Indira is intended for people writing command line interface for Erlang
+services. This means mainly package maintainers and sysadmins who want to run
+their own Erlang code.
+
+Indira provides functions for initial interaction with OS (like changing
+working directory or write PID file), configuring Erlang applications and
+starting them with their dependencies, setting up logging subsystem and
+initializing command channels.
+
+== Daemon parts ==
+
+Daemon built with Indira consists of several parts on different levels of
+design.
+
+For sysadmin, such daemon running the service is split into two parts: actual
+daemon (written in Erlang (escript)) and control tool script (may be written
+in any language, since it only talks through sockets to daemon instance).
+
+Inside Erlang code, there must be an application to run the service, of
+course. Beside the application, there's one Indira process called command
+router (module indira_router). It's started as part of `indira' application
+(so there will be two apps: `indira' and the service application) along with
+several listeners. Router passes commands coming from listeners to command
+executor, which is the last part.
+
+Command executor is a process that receives messages formed according to
+Indira protocol and sends responses back. There is no need to use Indira's API
+in the executor at all, so the application doesn't need to (and shouldn't)
+pull Indira as its dependency. But there's more: command executor doesn't
+even need to be a part of the service application, as long as it can talk to
+the application.
+
+Daemon accepts configuration from few different sources. It may load its
+settings from INI/YAML/JSON files or it may read command line parameters.
+Settings should be passed to the service application using OTP's standard
+method: by calling application:setenv(). There are several convenience
+wrapper functions in Indira's API, but the principle is this simple.
+Again, the application doesn't need to know about Indira's presence, since it
+takes the parameters from standard place.
+
+== Contact ==
+
+Indira was written by Stanislaw Klekot <dozzie at jarowit.net>.
+The primary distribution point is <http://dozzie.jarowit.net/>, with
+a secondary address on GitHub <https://github.com/dozzie/indira>.
+
+Indira is distributed under 3-clause BSD license.
