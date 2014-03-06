@@ -43,6 +43,7 @@ start_link(Parent) ->
 %%% gen_server callbacks
 %%%---------------------------------------------------------------------------
 
+%% @private
 %% @doc Initialize {@link gen_server} state.
 init({Parent, Commander} = _Args) ->
   % I can't call parent until this function finishes; I'll add a message to
@@ -71,10 +72,12 @@ spawn_listeners(Parent, State) ->
   {ok, State}.
 % }}}
 
+%% @private
 %% @doc Clean up {@link gen_server} state.
 terminate(_Reason, _State) ->
   ok.
 
+%% @private
 %% @doc Handle {@link gen_server:call/2}.
 handle_call({command, ReplyTo, Line} = _Request, _From, State) ->
   % I wanted to make this a pure message, but it turned out that I want parse
@@ -100,11 +103,13 @@ handle_call(_Request, _From, State) ->
   % ignore unknown calls
   {reply, ok, State}.
 
+%% @private
 %% @doc Handle {@link gen_server:cast/2}.
 handle_cast(_Request, State) ->
   % ignore unknown casts
   {noreply, State}.
 
+%% @private
 %% @doc Handle incoming messages.
 handle_info({spawn_listeners, Parent} = _Message, State) ->
   % adding listeners supervision tree, as promised in `init/1'
@@ -134,6 +139,7 @@ handle_info(_Message, State) ->
   % ignore unknown messages
   {noreply, State}.
 
+%% @private
 %% @doc Handle code change.
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.

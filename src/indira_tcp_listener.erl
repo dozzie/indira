@@ -1,4 +1,5 @@
 %%%---------------------------------------------------------------------------
+%%% @private
 %%% @doc
 %%%   TCP listener process. TCP listener listens on TCP socket (surprise!),
 %%%   accepts incoming connections and spawns for each of them a TCP reader

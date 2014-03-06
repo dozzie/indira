@@ -22,6 +22,7 @@
 %%% gen_event callbacks
 %%%---------------------------------------------------------------------------
 
+%% @private
 %% @doc Initialize event handler.
 %%   `Args' is a proplist that can contain `colour' or `color' boolean key. If
 %%   it's `true', console output will be coloured (default is `false').
@@ -35,10 +36,12 @@ init(Args) ->
   IODev = proplists:get_value(iodev, Args, group_leader),
   {ok, #opts{iodev = IODev, colour = Colour}}.
 
+%% @private
 %% @doc Clean up after event handler.
 terminate(_Arg, _Opts) ->
   ok.
 
+%% @private
 %% @doc Handle incoming events.
 %% @end
 %%
@@ -77,14 +80,17 @@ handle_event({info_report, GL, {Pid, Type, Data}} = _Event, Opts) ->
 handle_event(_Event, Opts) ->
   {ok, Opts}.
 
+%% @private
 %% @doc Handle {@link gen_event:call/3}.
 handle_call(_Request, Opts) ->
   {ok, ok, Opts}.
 
+%% @private
 %% @doc Handle incoming messages.
 handle_info(_Message, Opts) ->
   {ok, Opts}.
 
+%% @private
 %% @doc Handle code change.
 code_change(_OldVsn, Opts, _Extra) ->
   {ok, Opts}.

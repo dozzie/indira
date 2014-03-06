@@ -1,3 +1,6 @@
+% @private
+% Pity it doesn't work at all.
+
 Definitions.
 
 NUMBER = -?([1-9][0-9]*|0)(\.[0-9]+)?([eE][+-]?[0-9]+)?

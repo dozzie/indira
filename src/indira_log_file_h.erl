@@ -22,26 +22,32 @@
 %%% gen_event callbacks
 %%%---------------------------------------------------------------------------
 
+%% @private
 %% @doc Initialize event handler.
 init(_Args) ->
   {ok, #state{}}.
 
+%% @private
 %% @doc Clean up after event handler.
 terminate(_Arg, _State) ->
   ok.
 
+%% @private
 %% @doc Handle incoming events.
 handle_event(_Event, State) ->
   {ok, State}.
 
+%% @private
 %% @doc Handle {@link gen_event:call/3}.
 handle_call(_Request, State) ->
   {ok, ok, State}.
 
+%% @private
 %% @doc Handle incoming messages.
 handle_info(_Message, State) ->
   {ok, State}.
 
+%% @private
 %% @doc Handle code change.
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.

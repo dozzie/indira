@@ -43,6 +43,7 @@
 %%% Indira listener API
 %%%---------------------------------------------------------------------------
 
+%% @private
 %% @doc Listener description.
 supervision_child_spec(CmdRouter, {Host, Port} = _Args) ->
   MFA = {?MODULE, start_link, [CmdRouter, Host, Port]},
@@ -52,6 +53,7 @@ supervision_child_spec(CmdRouter, {Host, Port} = _Args) ->
 %%% public API for supervision tree
 %%%---------------------------------------------------------------------------
 
+%% @private
 %% @doc Start UDP listener process.
 start_link(CmdRouter, Host, Port) ->
   Args = {CmdRouter, Host, Port},
@@ -61,6 +63,7 @@ start_link(CmdRouter, Host, Port) ->
 %%% connection acceptor
 %%%---------------------------------------------------------------------------
 
+%% @private
 %% @doc Initialize {@link gen_server} state.
 %%   This includes creating listening UDP socket.
 init({CmdRouter, Host, Port} = _Args) ->
@@ -73,26 +76,31 @@ init({CmdRouter, Host, Port} = _Args) ->
   State = #state{socket = Socket, command_router = CmdRouter},
   {ok, State}.
 
+%% @private
 %% @doc Clean up {@link gen_server} state.
 %%   This includes closing the listening socket.
 terminate(_Reason, _State = #state{socket = Socket}) ->
   gen_udp:close(Socket),
   ok.
 
+%% @private
 %% @doc Handle code change.
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
+%% @private
 %% @doc Handle {@link gen_server:call/2}.
 handle_call(stop = _Request, _From, State) ->
   {stop, normal, ok, State};
 handle_call(_Request, _From, State) ->
   {noreply, State}. % ignore unknown calls
 
+%% @private
 %% @doc Handle {@link gen_server:cast/2}.
 handle_cast(_Request, State) ->
   {noreply, State}. % ignore unknown casts
 
+%% @private
 %% @doc Handle incoming messages (UDP data and commands).
 handle_info({udp, Socket, IP, Port, Line} = _Msg,
             State = #state{socket = Socket}) ->
