@@ -1,6 +1,9 @@
 %%%---------------------------------------------------------------------------
 %%% @doc
 %%%   TCP listener entry point.
+%%%   This listener is implemented as {@link gen_indira_sock_stream} module
+%%%   (listener and connection handler separated). It should be simple enough
+%%%   to serve as an example for your own code, if needed.
 %%%
 %%%   == Indira parameter ==
 %%%
@@ -28,8 +31,14 @@
 
 %% @private
 %% @doc Listener description.
-supervision_child_spec(CmdRouter, {Host, Port} = _Args) ->
-  MFA = {indira_tcp_sup, start_link, [CmdRouter, Host, Port]},
+
+supervision_child_spec(CmdRouter, {_Host,_Port} = BindAddr) ->
+  SockStreamSupArgs = [
+    indira_tcp_listener,
+    {indira_tcp_reader, start_link},
+    {CmdRouter, BindAddr}
+  ],
+  MFA = {indira_sock_stream_sup, start_link, SockStreamSupArgs},
   {MFA, supervisor}.
 
 %%%---------------------------------------------------------------------------

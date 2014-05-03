@@ -10,7 +10,7 @@
 -behaviour(gen_server).
 
 %% public API for supervision tree
--export([start_link/2]).
+-export([start_link/1]).
 
 %% gen_server callbacks
 -export([init/1, terminate/2]).
@@ -26,16 +26,16 @@
 %%%---------------------------------------------------------------------------
 
 %% @doc Start TCP reader process.
-start_link(CmdRouter, ClientSocket) ->
-  gen_server:start_link(?MODULE, {CmdRouter, ClientSocket}, []).
+start_link({CommandRouter, ClientSocket} = _Args) ->
+  gen_server:start_link(?MODULE, {CommandRouter, ClientSocket}, []).
 
 %%%---------------------------------------------------------------------------
 %%% gen_server callbacks
 %%%---------------------------------------------------------------------------
 
 %% @doc Initialize {@link gen_server} state.
-init({CmdRouter, ClientSocket} = _Args) ->
-  State = #state{socket = ClientSocket, command_router = CmdRouter},
+init({CommandRouter, ClientSocket} = _Args) ->
+  State = #state{socket = ClientSocket, command_router = CommandRouter},
   {ok, State}.
 
 %% @doc Clean up {@link gen_server} state.
