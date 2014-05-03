@@ -24,7 +24,8 @@
 %%%
 %%%   A file passed to <i>-config</i> VM option could look like this:
 %%%   ```
-%%%   [{indira, [
+%%%   [
+%%%     {indira, [
 %%%       {listen, [
 %%%         {indira_tcp, {"localhost", 16667}},
 %%%         {indira_unix, "/var/run/my_app.sock"}
@@ -34,8 +35,6 @@
 %%%     % ...
 %%%   ].
 %%%   '''
-%%%   The config assumes that `indira_unix' module is available (it's not
-%%%   supplied with Indira release).
 %%%
 %%%   == Command executor ==
 %%%
@@ -61,7 +60,7 @@
 %%%         (initscript)</li>
 %%%     <li><i>reload</i>, reload configuration stored in a file</li>
 %%%     <li><i>netconfig</i>, setup distributed Erlang (epmd, cookie and
-%%%         <i>-(s)name</i></li>
+%%%         <i>-(s)name</i></li>)
 %%%   </ul>
 %%%
 %%%   === Example executor ===
@@ -598,7 +597,8 @@ distributed(Name, NameType, Cookie) ->
 %% send command line to router {{{
 
 %% @doc Send command to Indira router.
-%%   The process calling this function will get the response as a message.
+%%   According to client protocol, response to the command from executor will
+%%   be returned as a message to the process that called this function.
 %%
 %% @see indira_router:command/2
 command(Indira, Line) ->

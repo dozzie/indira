@@ -12,9 +12,10 @@
 %%%
 %%%   == Communication command executor ==
 %%%
-%%%   Command executor is a separate process with `gen_server' behaviour.
-%%%   Messages sent to and expected from are documented in {@link indira}
-%%%   module, as it's mostly seen by Indira's user (daemon author).
+%%%   Command executor is a separate process, possibly implementing
+%%%   `gen_server' behaviour. Messages sent to and expected from are
+%%%   documented in {@link indira} module, as it's mostly seen by Indira's
+%%%   user (daemon author).
 %%%
 %%%   == Communication with listener ==
 %%%
