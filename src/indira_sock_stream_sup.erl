@@ -8,7 +8,7 @@
 %%% @end
 %%%---------------------------------------------------------------------------
 
--module(gen_indira_sock_stream_sup).
+-module(indira_sock_stream_sup).
 
 -behaviour(supervisor).
 
@@ -44,7 +44,7 @@ start_link(ListenModule, ConnHandler, Address) ->
 
 %% @doc Start connection handlers' supervisor.
 %%
-%% @see gen_indira_sock_stream_connection_sup
+%% @see indira_sock_stream_connection_sup
 %%
 %% @spec start_connection_supervisor(pid()) ->
 %%   {ok, Pid} | {error, Reason}
@@ -73,8 +73,8 @@ init({ListenModule, ConnHandler, Address} = _Args) ->
       % FIXME: dynamic? ListenModule?
       permanent, 5000, worker, [gen_indira_sock_stream]},
     {connection_sup,
-      {gen_indira_sock_stream_connection_sup, start_link, [ConnHandler]},
-      permanent, 5000, supervisor, [gen_indira_sock_stream_connection_sup]}
+      {indira_sock_stream_connection_sup, start_link, [ConnHandler]},
+      permanent, 5000, supervisor, [indira_sock_stream_connection_sup]}
   ],
   {ok, {Strategy, Children}}.
 

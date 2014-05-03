@@ -2,13 +2,10 @@
 %%% @private
 %%% @doc
 %%%   Supervisor that watches over connection handler processes.
-%%%
-%%% @TODO Possibility of spawning workers running different modules.
-%%%
 %%% @end
 %%%---------------------------------------------------------------------------
 
--module(gen_indira_sock_stream_connection_sup).
+-module(indira_sock_stream_connection_sup).
 
 -behaviour(supervisor).
 

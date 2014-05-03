@@ -230,7 +230,7 @@ supervisor(ListenModule, ConnHandlerModule, Address) ->
     {Mod,Fun} -> ok;
     Mod when is_atom(Mod) -> Fun = start_link
   end,
-  gen_indira_sock_stream_sup:start_link(ListenModule, {Mod,Fun}, Address).
+  indira_sock_stream_sup:start_link(ListenModule, {Mod,Fun}, Address).
 
 %%%---------------------------------------------------------------------------
 %%% private API
@@ -348,8 +348,7 @@ handle_info(timeout = _Message,
   end;
 
 handle_info({get_connection_supervisor, Supervisor} = _Message, State) ->
-  {ok, Pid} =
-    gen_indira_sock_stream_sup:start_connection_supervisor(Supervisor),
+  {ok, Pid} = indira_sock_stream_sup:start_connection_supervisor(Supervisor),
   {noreply, State#state{supervisor = Pid}, 0};
 
 handle_info(_Message, State) ->
