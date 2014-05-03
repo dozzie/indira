@@ -50,51 +50,90 @@
 %%%     </li>
 %%%   </ul>
 %%%
-%%%  == Connection handler module ==
+%%%   == Connection handler module ==
 %%%
-%%%  Connection handler can be any module. Especially well suited are modules
-%%%  implementing {@link gen_server} or {@link gen_event} behaviours.
+%%%   Connection handler can be any module. Especially well suited are modules
+%%%   implementing {@link gen_server} or {@link gen_event} behaviours.
 %%%
-%%%  Such module should only export a function that spawns new linked process
-%%%  (default name for such function is `start_link').
+%%%   Such module should only export a function that spawns new linked process
+%%%   (default name for such function is `start_link').
 %%%
-%%%  The function will be called with {@type connection()} (returned by
-%%%  `ListenModule:accept/1') as its only argument. The function should return
-%%%  `{ok,pid()}', `ignore' or `{error,Reason}' (returned values from {@link
-%%%  gen_server:start_link/3} are fine here). It is this function's
-%%%  responsibility to close passed {@type connection()} in case of `ignore'
-%%%  or `{error,Reason}'.
+%%%   The function will be called with {@type connection()} (returned by
+%%%   `ListenModule:accept/1') as its only argument. The function should return
+%%%   `{ok,pid()}', `ignore' or `{error,Reason}' (returned values from {@link
+%%%   gen_server:start_link/3} are fine here). It is this function's
+%%%   responsibility to close passed {@type connection()} in case of `ignore'
+%%%   or `{error,Reason}'.
 %%%
-%%%  === Small code example ===
+%%%   === Small code example ===
 %%%
-%%%  Starting (unsupervised) `my_connection_listener' spawning
-%%%  `my_connection_handler' (TCP listener not shown here for brevity):
-%%%  ```
-%%%  gen_indira_sock_stream:start_link(
-%%%    my_connection_listener,
-%%%    {my_connection_handler,start_link}, % or just `my_connection_handler'
-%%%    {"localhost", 12345}
-%%%  ).
-%%%  '''
+%%%   Starting (supervised) `my_connection_listener' spawning
+%%%   `my_connection_handler' (TCP listener not shown here for brevity):
+%%%   ```
+%%%   -module(my_app_sup).
 %%%
-%%%  TCP connection handler:
-%%%  ```
-%%%  -module(my_connection_handler).
-%%%  -behaviour(gen_server).
+%%%   -behaviour(supervisor).
 %%%
-%%%  -export([start_link/1]).
-%%%  % ...
+%%%   -export([start_link/1]).
 %%%
-%%%  start_link(Connection) ->
-%%%    case gen_server:start_link(?MODULE, Connection, []) of
-%%%      {ok, Pid} ->
-%%%        {ok, Pid};
-%%%      Failure ->
-%%%        gen_tcp:close(Connection),
-%%%        Failure
-%%%    end.
-%%%  % ...
-%%%  '''
+%%%   %% supervisor callbacks
+%%%   -export([init/1]).
+%%%
+%%%   %%%---------------------------------------------------------------------
+%%%   %%% starting the supervision tree
+%%%   %%%---------------------------------------------------------------------
+%%%
+%%%   start_link(Address) ->
+%%%     supervisor:start_link({local, ?MODULE}, ?MODULE, Address).
+%%%
+%%%   %%%---------------------------------------------------------------------
+%%%   %%% supervisor callbacks
+%%%   %%%---------------------------------------------------------------------
+%%%
+%%%   init(Address) ->
+%%%     GenSockStreamArgs = [
+%%%       my_connection_listener,
+%%%       my_connection_handler, % default function to call: `start_link/1'
+%%%       {"localhost", 12345}
+%%%     ],
+%%%     Strategy = {one_for_one, 5, 10},
+%%%     Children = [
+%%%       {example,
+%%%         {gen_indira_sock_stream, supervisor, GenSockStreamArgs},
+%%%         permanent, 5000, supervisor, [indira_sock_stream_sup]},
+%%%       % other children...
+%%%     ],
+%%%     {ok, {Strategy, Children}}.
+%%%   '''
+%%%
+%%%   TCP connection handler:
+%%%   ```
+%%%   -module(my_connection_handler).
+%%%   -behaviour(gen_server).
+%%%
+%%%   -export([start_link/1]).
+%%%   % ...
+%%%
+%%%   start_link(Connection) ->
+%%%     case gen_server:start_link(?MODULE, Connection, []) of
+%%%       {ok, Pid} ->
+%%%         {ok, Pid};
+%%%       Failure ->
+%%%         gen_tcp:close(Connection),
+%%%         Failure
+%%%     end.
+%%%   % ...
+%%%   '''
+%%%
+%%%   For development, it's sometimes easier to run the module unsupervised.
+%%%   This is how to do it:
+%%%   ```
+%%%   gen_indira_sock_stream:start_link(
+%%%     my_connection_listener,
+%%%     {my_connection_handler,start_link}, % or just `my_connection_handler'
+%%%     {"localhost", 12345}
+%%%   ).
+%%%   '''
 %%%
 %%% @end
 %%%---------------------------------------------------------------------------
