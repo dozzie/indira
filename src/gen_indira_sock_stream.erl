@@ -93,13 +93,15 @@
 %%%   init(Address) ->
 %%%     GenSockStreamArgs = [
 %%%       my_connection_listener,
-%%%       my_connection_handler, % default function to call: `start_link/1'
+%%%       % child will be started with indira_sock_stream_sup:start_link(), so
+%%%       % this must be in form of {Mod,Fun}
+%%%       {my_connection_handler,start_link},
 %%%       {"localhost", 12345}
 %%%     ],
 %%%     Strategy = {one_for_one, 5, 10},
 %%%     Children = [
 %%%       {example,
-%%%         {gen_indira_sock_stream, supervisor, GenSockStreamArgs},
+%%%         {indira_sock_stream_sup, start_link, GenSockStreamArgs},
 %%%         permanent, 5000, supervisor, [indira_sock_stream_sup]},
 %%%       % other children...
 %%%     ],
@@ -260,6 +262,11 @@ start_link(ListenModule, ConnHandlerModule, Address) ->
 %%   a separate process. Such process is started by function part in
 %%   `ConnHandlerModule' (or `start_link/1' if it's not specified).
 %%   See {@type connection_handler()} for details.
+%%
+%%   <b>NOTE</b>: This function is the same as calling
+%%   `indira_sock_stream_sup:start_link(ListenModule, ConnHandlerModule,
+%%   Address)', except that `ConnHandlerModule' must be in `{Module,Function}'
+%%   form. You can rely on this behaviour.
 %%
 %% @spec supervisor(listener_module(), connection_handler(), term()) ->
 %%   {ok, Supervisor :: pid()} | ignore | {error, Reason}

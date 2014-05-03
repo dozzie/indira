@@ -65,6 +65,9 @@
 %%%   spawned processes. The address most probably should be passed in `Args'
 %%%   (which equals to `[]' in above examples).
 %%%
+%%%   @TODO Change `supervision_child_spec/2' to `child_spec/2' and return
+%%%     full child specification, not just fragments.
+%%%
 %%% @end
 %%%---------------------------------------------------------------------------
 
