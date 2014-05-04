@@ -182,6 +182,9 @@
 %%% @TODO Notice if no listeners defined.
 %%% @TODO Channel types defined by operator (to differentiate between unix
 %%%   socket, SSL and TCP).
+%%% @TODO Pre-format standard OTP logs.
+%%% @TODO Add some channel-defined context to commands (e.g. for operation
+%%%   logging).
 %%%
 %%% @see indira_tcp
 %%% @see indira_udp
