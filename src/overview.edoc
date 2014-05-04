@@ -43,6 +43,10 @@ required applications and do other tasks required to run a daemon. Indira only
 relies on {@link application} interface and on parameters provided by command
 line script.
 
+Indira may also be injected to already-written services to add
+instrumentation, logging, monitoring probes and so on. See
+{@link examples_app_config. configuration examples}.
+
 === Command subsystem ===
 
 There is an additional, optional -- although highly recommended -- subsystem
