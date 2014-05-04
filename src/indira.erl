@@ -234,9 +234,10 @@
 %%   <li>`stdout' and `stderr' prints events on screen (`{StdX,colour}'
 %%       additionally colours warnings and errors)</li>
 %%   <li>`{file,Filename}' writes events to log file</li>
-%%   <li>`syslog' sends events to local syslog daemon</li>
+%%   <li>`syslog' sends events to local syslog daemon (facility
+%%       <i>daemon</i>)</li>
 %%   <li>`{syslog,Host}' and `{syslog,{Host,Port}}' send logs to remote host
-%%       using syslog protocol (UDP-based)</li>
+%%       using syslog protocol (UDP-based) (facility <i>daemon</i>)</li>
 %%   <li>`lager' starts <a href="https://github.com/basho/lager">Lager</a>
 %%       application; Lager must be configured beforehand</li>
 %%   <li>`{lager,Config}' starts Lager, but also configures it by calling
@@ -558,10 +559,12 @@ register_log_dest(_DaemonName, {file, _Filename}) ->
   {error, {not_implemented,file}}; % TODO
 
 %% syslog log destination
-register_log_dest(_DaemonName, syslog) ->
-  {error, {not_implemented,syslog}}; % TODO
-register_log_dest(_DaemonName, {syslog, _Destination}) ->
-  {error, {not_implemented,syslog}}; % TODO
+register_log_dest(DaemonName, syslog) ->
+  Options = [{facility, daemon}, {ident, DaemonName}],
+  error_logger:add_report_handler(indira_log_syslog_h, Options);
+register_log_dest(DaemonName, {syslog, Destination}) ->
+  Options = [{remote, Destination}, {facility, daemon}, {ident, DaemonName}],
+  error_logger:add_report_handler(indira_log_syslog_h, Options);
 
 %% lager
 register_log_dest(_DaemonName, lager) ->
