@@ -191,6 +191,9 @@
 
 -module(indira).
 
+%% API for running from command line (`erl -s indira')
+-export([start/0]).
+
 %% API for escript
 -export([set_environment/1, set_option/3, load_app_config/1]).
 -export([sleep_forever/0]).
@@ -322,6 +325,22 @@
 
 %% }}}
 %%----------------------------------------------------------
+
+%%%---------------------------------------------------------------------------
+%%% API for running from command line (`erl -s indira')
+%%%---------------------------------------------------------------------------
+
+%% @doc Start Indira application. Function intended to be called from command
+%%   line:
+%% ```
+%% $ erl \
+%%     -indira listen '[{indira_tcp, {any,5500}}]' \
+%%     -indira commander some_module \
+%%     -s indira \
+%%     other args ...
+%% '''
+start() ->
+  application:start(indira, permanent).
 
 %%%---------------------------------------------------------------------------
 %%% API for escript
