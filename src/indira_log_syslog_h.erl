@@ -98,30 +98,35 @@ code_change(_OldVsn, State, _Extra) ->
 
 %% @doc Print error message.
 %%   Function uses passed group leader to send characters to.
-error(_Pid, _LogType, Line,
+error(Pid, LogType, Line,
       _State = #state{facility = Facility, ident = Ident, syslog = Syslog}) ->
-  % TODO: add Pid and LogType to event context
-  Message = indira_syslog:format(Facility, err, Ident, Line),
+  Context = context(Pid, LogType),
+  Message = indira_syslog:format(Facility, err, Ident, [Context, ": ", Line]),
   indira_syslog:send(Syslog, Message),
   ok.
 
 %% @doc Print warning message.
 %%   Function uses passed group leader to send characters to.
-warning(_Pid, _LogType, Line,
+warning(Pid, LogType, Line,
         _State = #state{facility = Facility, ident = Ident, syslog = Syslog}) ->
-  % TODO: add Pid and LogType to event context
-  Message = indira_syslog:format(Facility, warning, Ident, Line),
+  Context = context(Pid, LogType),
+  Message = indira_syslog:format(Facility, warning, Ident,
+                                 [Context, ": ", Line]),
   indira_syslog:send(Syslog, Message),
   ok.
 
 %% @doc Print info message.
 %%   Function uses passed group leader to send characters to.
-info(_Pid, _LogType, Line,
+info(Pid, LogType, Line,
      _State = #state{facility = Facility, ident = Ident, syslog = Syslog}) ->
-  % TODO: add Pid and LogType to event context
-  Message = indira_syslog:format(Facility, info, Ident, Line),
+  Context = context(Pid, LogType),
+  Message = indira_syslog:format(Facility, info, Ident, [Context, ": ", Line]),
   indira_syslog:send(Syslog, Message),
   ok.
+
+%% @doc Format event context.
+context(Pid, LogType) ->
+  io_lib:format("~p ~p", [Pid, LogType]).
 
 %%%---------------------------------------------------------------------------
 
