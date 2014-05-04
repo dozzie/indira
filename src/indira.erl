@@ -596,6 +596,7 @@ distributed(Name, NameType) ->
   net_kernel:start([Name, NameType]).
 
 %% @doc Configure Erlang networking (distributed Erlang).
+%% @TODO Support for `{file, CookieFile}'
 distributed(Name, NameType, Cookie) ->
   net_kernel:start([Name, NameType]),
   CookieAtom = case Cookie of
