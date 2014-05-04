@@ -12,6 +12,9 @@ working directory or write PID file), configuring Erlang applications and
 starting them with their dependencies, setting up logging subsystem and
 initializing command channels.
 
+The application is named after Indira Toledo, a character of an excellent S-F
+novel titled "Mother of Demons" by Eric Flint.
+
 == Daemon parts ==
 
 Daemon built with Indira consists of several parts on different levels of
