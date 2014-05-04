@@ -2,10 +2,32 @@
 %%% @doc
 %%%   Example application configuration.
 %%%
-%%% == Setup with `-config myapp.config' ==
+%%% == Setup with command line flags ==
+%%%
+%%%   Indira may be configured directly in command line:
 %%%
 %%% ```
-%%% % myapp.config
+%%% $ erl \
+%%%     -indira listen '[{indira_tcp, {any,5500}}]' \
+%%%     -indira commander example_command_executor \
+%%%     -s indira \
+%%%     other args ...
+%%% '''
+%%%
+%%%   This way no additional configuration file is needed and very little code
+%%%   needs to be written.
+%%%
+%%%   This migt be useful trick for injecting Indira to already written
+%%%   services, e.g. to provide additional instrumentation. Note that
+%%%   `example_command_executor' doesn't even need to come from original
+%%%   service -- it could be custom module.
+%%%
+%%% == Setup with `-config myapp.config' ==
+%%%
+%%%   Instead of specifying flags one may provide configuration file with
+%%%   `-config myapp.config' option. This is how it could look like:
+%%%
+%%% ```
 %%% [
 %%%   {some_app, [
 %%%     % some_app's environment
