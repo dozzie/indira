@@ -63,6 +63,8 @@ spawn_listeners(Parent, State) ->
     undefined -> []
   end,
 
+  % TODO: report listeners that failed to start for some reason -- or actually
+  % move this code to `indira_sup' (`indira_listener_sup') module
   [indira_sup:start_listener(ListenerSup, ChildSpec) ||
     {EntryModule, Args} <- SpecList,
     ChildSpec <- [EntryModule:supervision_child_spec(self(), Args)]],
