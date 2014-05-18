@@ -60,7 +60,7 @@
 %%%         (initscript)</li>
 %%%     <li><i>reload</i>, reload configuration stored in a file</li>
 %%%     <li><i>netconfig</i>, setup distributed Erlang (epmd, cookie and
-%%%         <i>-(s)name</i></li>)
+%%%         <i>-(s)name</i>)</li>
 %%%   </ul>
 %%%
 %%%   === Example executor ===
