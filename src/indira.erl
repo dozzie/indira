@@ -185,6 +185,7 @@
 %%% @TODO Pre-format standard OTP logs.
 %%% @TODO Add some channel-defined context to commands (e.g. for operation
 %%%   logging).
+%%% @TODO Move `command()' and `log_*()' to {@link gen_indira_listener}.
 %%%
 %%% @see indira_tcp
 %%% @see indira_udp
@@ -627,6 +628,9 @@ distributed(Name, NameType, Cookie) ->
 %%   According to client protocol, response to the command from executor will
 %%   be returned as a message to the process that called this function.
 %%
+%%   This function is intended to be called from {@link gen_indira_listener}
+%%   supervision tree.
+%%
 %% @see indira_router:command/2
 command(Indira, Line) ->
   indira_router:command(Indira, Line).
@@ -639,6 +643,9 @@ command(Indira, Line) ->
 %%
 %%   This call form is only needed when a single process handles multiple
 %%   clients.
+%%
+%%   This function is intended to be called from {@link gen_indira_listener}
+%%   supervision tree.
 %%
 %% @see indira_router:command/3
 command(Indira, RoutingKey, Line) ->
