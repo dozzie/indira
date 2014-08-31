@@ -100,7 +100,7 @@ code_change(_OldVsn, Opts, _Extra) ->
 %% @doc Print error message.
 %%   Function uses passed group leader to send characters to.
 error(IODev, Pid, LogType, Line, Opts) ->
-  Header = header(Pid, info, LogType, Opts),
+  Header = header(Pid, error, LogType, Opts),
   case Opts#opts.colour of
     true ->
       io:put_chars(IODev, [colour(red), Header, Line, colour_off(), "\n"]);
