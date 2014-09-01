@@ -201,6 +201,7 @@
 -export([start/0]).
 
 %% API for escript
+-export([add_listener/2]).
 -export([set_environment/1, set_option/3, load_app_config/1]).
 -export([sleep_forever/0]).
 -export([start_rec/1, start_rec/2]).
@@ -348,6 +349,29 @@ start() ->
 %%% API for escript
 %%%---------------------------------------------------------------------------
 
+%%----------------------------------------------------------
+%% set application configuration parameters (environment) {{{
+
+%% @doc Add listener to list of listeners started with Indira.
+%%
+%%   This function is intended to be called before
+%%   `application:start(indira)' and is a simple wrapper over
+%%   {@link application:set_env/3}.
+add_listener(Module, Arg) ->
+  % remember that this is called from escript, when Indira was not started yet
+  case application:load(indira) of
+    ok -> ok;
+    {error, {already_loaded, indira}} -> ok;
+    {error, Reason} -> erlang:error(Reason)
+  end,
+  case application:get_env(indira, listen) of
+    undefined -> OldListeners = [];
+    {ok, OldListeners} -> ok
+  end,
+  application:set_env(indira, listen, [{Module, Arg} | OldListeners]),
+  ok.
+
+%% }}}
 %%----------------------------------------------------------
 %% set application configuration parameters (environment) {{{
 
