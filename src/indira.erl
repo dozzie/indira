@@ -201,7 +201,7 @@
 -export([start/0]).
 
 %% API for escript
--export([add_listener/2]).
+-export([set_commander/1, add_listener/2]).
 -export([set_environment/1, set_option/3, load_app_config/1]).
 -export([sleep_forever/0]).
 -export([start_rec/1, start_rec/2]).
@@ -350,7 +350,22 @@ start() ->
 %%%---------------------------------------------------------------------------
 
 %%----------------------------------------------------------
-%% set application configuration parameters (environment) {{{
+%% convenience wrappers for Indira's own options {{{
+
+%% @doc Set commander address.
+%%
+%%   This function is intended to be called before
+%%   `application:start(indira)' and is a simple wrapper over
+%%   {@link application:set_env/3}.
+set_commander(Commander) ->
+  % remember that this is called from escript, when Indira was not started yet
+  case application:load(indira) of
+    ok -> ok;
+    {error, {already_loaded, indira}} -> ok;
+    {error, Reason} -> erlang:error(Reason)
+  end,
+  application:set_env(indira, commander, Commander),
+  ok.
 
 %% @doc Add listener to list of listeners started with Indira.
 %%
