@@ -45,29 +45,36 @@
 %%%
 %%%   == Entry point module API ==
 %%%
-%%%   `Module:supervision_child_spec/2' gets two arguments: Indira router
-%%%   address suitable for {@link command/2} and the term that was specified
-%%%   as module argument in environment specification. Now, `Module' has an
-%%%   opportunity to pass Indira handle to the child to be spawned.
+%%%   `Module:child_spec/2' gets two arguments: Indira router address suitable
+%%%   for {@link command/2} and the term that was specified as module argument
+%%%   in environment specification. Now, `Module' has an opportunity to pass
+%%%   Indira handle to the child to be spawned.
 %%%
-%%%   `Module:supervision_child_spec/2' is supposed to return `{MFA, Type}',
-%%%   where `Type' is `worker' or `supervisor' and `MFA' is `{Module,
-%%%   Function, Args}' suitable for {@link erlang:apply/3}. Semantics are the
-%%%   same as `StartFunc' in child specification in supervisor.
+%%%   `Module:child_spec/2' is supposed to return
+%%%   {@type supervisor:child_spec()}, i.e. `{Id, MFA, Restart, Shutdown,
+%%%   Type, Modules}', where:
+%%%   <ul>
+%%%     <li>`Id' is ignored</li>
+%%%     <li>`MFA' is `{Module, Function, Args}' suitable for
+%%%         {@link erlang:apply/3}</li>
+%%%     <li>`Restart' is ignored and will always be set to `permanent'</li>
+%%%     <li>`Shutdown' is `brutal_kill', integer >0 or `infinity'</li>
+%%%     <li>`Type' is `worker' or `supervisor'</li>
+%%%     <li>`Modules' is a list of modules used by the child or a single atom
+%%%         `dynamic'</li>
+%%%   </ul>
 %%%
 %%%   Typically, for module `foo' it would be:
 %%%   <ul>
-%%%     <li>`{{foo, start_link, []}, worker}' for `foo:start_link/0' that runs
-%%%         worker</li>
-%%%     <li>`{{foo_sup, start_link, []}, supervisor}' for
-%%%         `foo_sup:start_link/0' that runs whole supervision tree</li>
+%%%     <li>`{ignore, {foo, start_link, []}, permanent, 5000, worker, [foo]}'
+%%%         for `foo:start_link/0' that runs worker</li>
+%%%     <li>`{ignore, {foo_sup, start_link, []}, permanent, 5000, supervisor,
+%%%         [foo_sup]}' for `foo_sup:start_link/0' that runs whole supervision
+%%%         tree</li>
 %%%   </ul>
 %%%   Note that the definitions above don't pass Indira router address to
 %%%   spawned processes. The address most probably should be passed in `Args'
 %%%   (which equals to `[]' in above examples).
-%%%
-%%%   @TODO Change `supervision_child_spec/2' to `child_spec/2' and return
-%%%     full child specification, not just fragments.
 %%%
 %%% @see indira_log
 %%% @end
@@ -84,7 +91,7 @@
 
 %% @doc Behaviour description.
 behaviour_info(callbacks = _Aspect) ->
-  [{supervision_child_spec, 2}];
+  [{child_spec, 2}];
 behaviour_info(_Aspect) ->
   undefined.
 

@@ -55,8 +55,16 @@ start_listener(Supervisor, {{M,F,A}, ChildType} = _Spec) ->
 %% @doc Initialize supervisor.
 init([] = _Args) ->
   Strategy = {one_for_one, 5, 10},
-  Children = [],
+  Children = case application:get_env(indira, listen) of
+    undefined       -> []; % TODO: indicate error?
+    {ok, Listeners} -> [child_spec(Module, Arg) || {Module, Arg} <- Listeners]
+  end,
   {ok, {Strategy, Children}}.
+
+child_spec(Module, Arg) ->
+  {_Id, {_,_,_} = MFA, _Restart, Shutdown, Type, Modules} =
+    Module:child_spec(indira_router, Arg),
+  {make_ref(), MFA, permanent, Shutdown, Type, Modules}.
 
 %%%---------------------------------------------------------------------------
 %%% vim:ft=erlang:foldmethod=marker

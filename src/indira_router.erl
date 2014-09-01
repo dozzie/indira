@@ -12,7 +12,7 @@
 -behaviour(gen_server).
 
 %% supervision tree API
--export([start_link/1]).
+-export([start_link/0]).
 
 %% gen_server callbacks
 -export([init/1, terminate/2, handle_call/3, handle_cast/2, handle_info/2]).
@@ -30,11 +30,11 @@
 %%%---------------------------------------------------------------------------
 
 %% @doc Start router process.
-start_link(Parent) ->
+start_link() ->
   case application:get_env(indira, commander) of
     {ok, Cmder} ->
       % TODO: don't require registering new process
-      gen_server:start_link({local, ?MODULE}, ?MODULE, {Parent, Cmder}, []);
+      gen_server:start_link({local, ?MODULE}, ?MODULE, [Cmder], []);
     undefined ->
       % TODO: or allow start and then reconfiguration?
       {error, no_commander}
@@ -46,34 +46,9 @@ start_link(Parent) ->
 
 %% @private
 %% @doc Initialize {@link gen_server} state.
-init({Parent, Commander} = _Args) ->
-  % I can't call parent until this function finishes; I'll add a message to
-  % process' mailbox for handling later (just calling `spawn_listeners/2')
-  self() ! {spawn_listeners, Parent},
-
+init([Commander] = _Args) ->
   State = #state{commander = Commander},
   {ok, State}.
-
-%% spawn_listeners(Parent, State) -> {ok, NewState} {{{
-%% @doc Spawn listeners defined for this Indira instance.
-spawn_listeners(Parent, State) ->
-  {ok, ListenerSup} = indira_sup:start_listener_pool(Parent),
-
-  SpecList = case application:get_env(indira, listen) of
-    {ok, L} -> L;
-    undefined -> []
-  end,
-
-  % TODO: report listeners that failed to start for some reason -- or actually
-  % move this code to `indira_sup' (`indira_listener_sup') module
-  [indira_sup:start_listener(ListenerSup, ChildSpec) ||
-    {EntryModule, Args} <- SpecList,
-    ChildSpec <- [EntryModule:supervision_child_spec(self(), Args)]],
-
-  % TODO: I could use remembering children
-
-  {ok, State}.
-% }}}
 
 %% @private
 %% @doc Clean up {@link gen_server} state.
@@ -121,11 +96,6 @@ handle_cast(_Request, State) ->
 
 %% @private
 %% @doc Handle incoming messages.
-handle_info({spawn_listeners, Parent} = _Message, State) ->
-  % adding listeners supervision tree, as promised in `init/1'
-  {ok, NewState} = spawn_listeners(Parent, State),
-  {noreply, NewState};
-
 handle_info({result, ReplyTo, Reply} = _Message, State) ->
   % send result back to listener
   ReplyLine = case indira_proto_serializer:encode(Reply) of

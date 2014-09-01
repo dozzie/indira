@@ -1,6 +1,6 @@
 %%%---------------------------------------------------------------------------
 %%% @doc
-%%%   Indira main API.
+%%%   Indira interface for `escript' scripts.
 %%%
 %%%   This module contains functions to be called from `escript' script and
 %%%   utility functions for {@link gen_indira_listener. listeners}. It also
@@ -19,7 +19,8 @@
 %%%
 %%%   The value of <i>listen</i> is a list of pairs `{Mod,Args}'. `Mod' is
 %%%   a name (atom) of module which is considered to be listener's entry
-%%%   point. `Args' is an argument passed to `Mod:supervision_child_spec/2'.
+%%%   point. `Args' is an argument passed to `Mod:child_spec/2'. All listeners
+%%%   must start successfully (this may became configurable in the future).
 %%%   For more details see {@link gen_indira_listener}.
 %%%
 %%%   A file passed to <i>-config</i> VM option could look like this:
@@ -179,7 +180,8 @@
 %%%   proplists that will be serialized to JSON object.
 %%%
 %%% @TODO API for client command line utilities.
-%%% @TODO Notice if no listeners defined.
+%%% @TODO Notice if no listeners defined (see {@link
+%%%   indira_listener_sup:init/1}).
 %%% @TODO Channel types defined by operator (to differentiate between unix
 %%%   socket, SSL and TCP).
 %%% @TODO Pre-format standard OTP logs.

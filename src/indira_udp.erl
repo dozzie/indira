@@ -23,7 +23,7 @@
 %%%---------------------------------------------------------------------------
 
 %% Indira listener API
--export([supervision_child_spec/2]).
+-export([child_spec/2]).
 
 %% gen_server callbacks
 -export([init/1, terminate/2]).
@@ -45,9 +45,10 @@
 
 %% @private
 %% @doc Listener description.
-supervision_child_spec(CmdRouter, {Host, Port} = _Args) ->
-  MFA = {?MODULE, start_link, [CmdRouter, Host, Port]},
-  {MFA, worker}.
+child_spec(CmdRouter, {Host, Port} = _Args) ->
+  {ignore,
+    {?MODULE, start_link, [CmdRouter, Host, Port]},
+    permanent, 5000, worker, [?MODULE]}.
 
 %%%---------------------------------------------------------------------------
 %%% public API for supervision tree

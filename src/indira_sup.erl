@@ -54,7 +54,7 @@ init([] = _Args) ->
   Strategy = {one_for_all, 5, 10},
   Children = [
     {indira_router,
-      {indira_router, start_link, [self()]},
+      {indira_router, start_link, []},
       permanent, 5000, worker, [indira_router]},
     {indira_listener_sup,
       {indira_listener_sup, start_link, []},
