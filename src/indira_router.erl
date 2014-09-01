@@ -88,7 +88,14 @@ handle_call({command, ReplyTo, Line} = _Request, _From, State) ->
     {ok, Command} ->
       % Indira is not the place where the commands should be logged, leave it
       % to the commander
-      State#state.commander ! {command, self(), ReplyTo, Command},
+      try
+        State#state.commander ! {command, self(), ReplyTo, Command}
+      catch
+        % commander is an atom and nothing is registered there
+        error:badarg ->
+          indira:log_error(no_commander, [{command, Command}]),
+          ignore % TODO: send an error message back to ReplyTo?
+      end,
       ok;
     {error, _Reason} = Error ->
       % NOTE: error logging is left to listeners (they can properly format
