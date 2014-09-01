@@ -210,11 +210,6 @@
 -export([distributed/2]).
 -export([distributed/3]).
 
-%% API for listeners
--export([command/2, command/3]).
--export([log_info/2, log_error/2, log_error/3,
-         log_critical/2, log_critical/3]).
-
 %%%---------------------------------------------------------------------------
 %%% types
 %%%---------------------------------------------------------------------------
@@ -613,96 +608,6 @@ distributed(Name, NameType, Cookie) ->
     _ when is_binary(Cookie) -> binary_to_atom(Cookie, utf8)
   end,
   erlang:set_cookie(node(), CookieAtom).
-
-%% }}}
-%%----------------------------------------------------------
-
-%%%---------------------------------------------------------------------------
-%%% API for listeners
-%%%---------------------------------------------------------------------------
-
-%%----------------------------------------------------------
-%% send command line to router {{{
-
-%% @doc Send command to Indira router.
-%%   According to client protocol, response to the command from executor will
-%%   be returned as a message to the process that called this function.
-%%
-%%   This function is intended to be called from {@link gen_indira_listener}
-%%   supervision tree.
-%%
-%% @see indira_router:command/2
-command(Indira, Line) ->
-  indira_router:command(Indira, Line).
-
-%% @doc Send command to Indira router.
-%%   The process calling this function will get the response as a message.
-%%
-%%   `RoutingKey' is an additional information to tell apart between multiple
-%%   clients and will be included in command reply message.
-%%
-%%   This call form is only needed when a single process handles multiple
-%%   clients.
-%%
-%%   This function is intended to be called from {@link gen_indira_listener}
-%%   supervision tree.
-%%
-%% @see indira_router:command/3
-command(Indira, RoutingKey, Line) ->
-  indira_router:command(Indira, RoutingKey, Line).
-
-%% }}}
-%%----------------------------------------------------------
-%% logging (unified) {{{
-
-%% @doc Send info report about an event to {@link error_logger}.
-%%   The report is formatted uniformly for Indira.
-log_info(InfoType, Context) ->
-  error_logger:info_report([{indira_info, InfoType} | Context]).
-
-%% @doc Send error report about an error to {@link error_logger}.
-%%   The report is formatted uniformly for Indira.
-%%
-%%   This function is intended for use with single `{error,Reason}' tuple.
-%%
-%%   Such error is something that generally shouldn't happen, but if it does,
-%%   it has limited scope (e.g. command line parse error for a single client).
-log_error(ErrorType, ErrorReason, Context) ->
-  error_logger:warning_report(
-    [{indira_error, ErrorType}, {error, ErrorReason} | Context]
-  ).
-
-%% @doc Send error report about an error to {@link error_logger}.
-%%   The report is formatted uniformly for Indira.
-%%
-%%   This function is intended for use when no single `{error,Reason}' tuple
-%%   is present (e.g. when multiple errors occurred).
-%%
-%%   Such error is something that generally shouldn't happen, but if it does,
-%%   it has limited scope (e.g. command line parse error for a single client).
-log_error(ErrorType, Context) ->
-  error_logger:warning_report([{indira_error, ErrorType} | Context]).
-
-%% @doc Send log report about severe error to {@link error_logger}.
-%%   The report is formatted uniformly for Indira.
-%%
-%%   This function is intended for use with single `{error,Reason}' tuple.
-%%
-%%   For severe errors, like inability to listen on a specified port.
-log_critical(ErrorType, ErrorReason, Context) ->
-  error_logger:error_report(
-    [{indira_error, ErrorType}, {error, ErrorReason} | Context]
-  ).
-
-%% @doc Send log report about severe error to {@link error_logger}.
-%%   The report is formatted uniformly for Indira.
-%%
-%%   This function is intended for use when no single `{error,Reason}' tuple
-%%   is present (e.g. when multiple errors occurred).
-%%
-%%   For severe errors, like inability to listen on a specified port.
-log_critical(ErrorType, Context) ->
-  error_logger:error_report([{indira_error, ErrorType} | Context]).
 
 %% }}}
 %%----------------------------------------------------------

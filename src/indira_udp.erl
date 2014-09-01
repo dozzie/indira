@@ -106,14 +106,14 @@ handle_info({udp, Socket, IP, Port, Line} = _Msg,
             State = #state{socket = Socket}) ->
   #state{command_router = CmdRouter} = State,
   RoutingHint = {IP, Port},
-  case indira:command(CmdRouter, RoutingHint, Line) of
+  case gen_indira_listener:command(CmdRouter, RoutingHint, Line) of
     ok ->
       ok;
     {error, Reason} ->
       {ok, Sockname} = inet:sockname(Socket),
       Client = {udp, Sockname, RoutingHint},
-      indira:log_error(bad_command_line, Reason,
-                       [{command_line, Line}, {client, Client}]),
+      gen_indira_listener:log_error(bad_command_line, Reason,
+                                    [{command_line, Line}, {client, Client}]),
       proceed
   end,
   {noreply, State};

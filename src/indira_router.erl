@@ -93,7 +93,7 @@ handle_call({command, ReplyTo, Line} = _Request, _From, State) ->
       catch
         % commander is an atom and nothing is registered there
         error:badarg ->
-          indira:log_error(no_commander, [{command, Command}]),
+          gen_indira_listener:log_error(no_commander, [{command, Command}]),
           ignore % TODO: send an error message back to ReplyTo?
       end,
       ok;
@@ -134,8 +134,8 @@ handle_info({result, ReplyTo, Reply} = _Message, State) ->
       % command executor sent an invalid structure
       % I can't give more readable client's address than `ReplyTo', but this
       % should happen rarely, anyway
-      indira:log_error(bad_command_reply, Reason,
-                       [{reply, Reply}, {client_route, ReplyTo}]),
+      gen_indira_listener:log_error(bad_command_reply, Reason,
+                                    [{reply, Reply}, {client_route, ReplyTo}]),
       <<"bad result">>
   end,
   case ReplyTo of
@@ -162,7 +162,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%
 %%   Function may fail on syntax error, `{error,Reason}' will be returned in
 %%   such case. The caller is responsible for logging an error (possibly with
-%%   {@link indira:log_error/3}).
+%%   {@link gen_indira_listener:log_error/3}).
 %%
 %% @spec command(pid(), binary() | string()) ->
 %%   ok | {error, Reason}
@@ -174,7 +174,7 @@ command(Indira, Line) ->
 %%
 %%   Function may fail on syntax error, `{error,Reason}' will be returned in
 %%   such case. The caller is responsible for logging an error (possibly with
-%%   {@link indira:log_error/3}).
+%%   {@link gen_indira_listener:log_error/3}).
 %%
 %%   `RoutingKey' is an additional information to tell apart between multiple
 %%   clients and will be included in command reply message.
