@@ -68,8 +68,8 @@ handle_info({unix, Socket, Line} = _Msg, State = #state{socket = Socket}) ->
       {noreply, State};
     {error, Reason} ->
       Client = {unix, unknown_peer},
-      gen_indira_listener:log_error(bad_command_line, Reason,
-                                    [{command_line, Line}, {client, Client}]),
+      indira_log:error(bad_command_line, Reason,
+                       [{command_line, Line}, {client, Client}]),
       {stop, bad_command_line, State}
   end;
 

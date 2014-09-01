@@ -112,8 +112,8 @@ handle_info({udp, Socket, IP, Port, Line} = _Msg,
     {error, Reason} ->
       {ok, Sockname} = inet:sockname(Socket),
       Client = {udp, Sockname, RoutingHint},
-      gen_indira_listener:log_error(bad_command_line, Reason,
-                                    [{command_line, Line}, {client, Client}]),
+      indira_log:error(bad_command_line, Reason,
+                       [{command_line, Line}, {client, Client}]),
       proceed
   end,
   {noreply, State};

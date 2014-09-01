@@ -185,7 +185,6 @@
 %%% @TODO Pre-format standard OTP logs.
 %%% @TODO Add some channel-defined context to commands (e.g. for operation
 %%%   logging).
-%%% @TODO Move `command()' and `log_*()' to {@link gen_indira_listener}.
 %%%
 %%% @see indira_tcp
 %%% @see indira_udp
@@ -522,7 +521,7 @@ setup_logging(DaemonName, Options) ->
     [] ->
       ok;
     Errors ->
-      log_error(setup_logging, Errors),
+      indira_log:error(setup_logging, Errors),
       {error,Errors}
   end.
 

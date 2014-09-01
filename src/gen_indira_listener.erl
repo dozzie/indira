@@ -34,8 +34,9 @@
 %%%   it's opaque to Indira router.
 %%%
 %%%   To provide uniformly formatted logs, listener should log errors using
-%%%   {@link log_error/3} (e.g. in case of problems in communication with
-%%%   client) or {@link log_critical/3} (e.g. in case of socket setup error).
+%%%   {@link indira_log:error/3} (e.g. in case of problems in communication
+%%%   with client) or {@link indira_log:critical/3} (e.g. in case of socket
+%%%   setup error).
 %%%
 %%%   === Line format ===
 %%%
@@ -68,6 +69,7 @@
 %%%   @TODO Change `supervision_child_spec/2' to `child_spec/2' and return
 %%%     full child specification, not just fragments.
 %%%
+%%% @see indira_log
 %%% @end
 %%%---------------------------------------------------------------------------
 
@@ -75,10 +77,8 @@
 
 -export([behaviour_info/1]).
 
-%% API for listeners
+%% sending commands to router
 -export([command/2, command/3]).
--export([log_info/2, log_error/2, log_error/3,
-         log_critical/2, log_critical/3]).
 
 %%%---------------------------------------------------------------------------
 
@@ -89,11 +89,8 @@ behaviour_info(_Aspect) ->
   undefined.
 
 %%%---------------------------------------------------------------------------
-%%% API for listeners
+%%% sending commands to router
 %%%---------------------------------------------------------------------------
-
-%%----------------------------------------------------------
-%% send command line to router {{{
 
 %% @doc Send command to Indira router.
 %%   According to client protocol, response to the command from executor will
@@ -121,62 +118,6 @@ command(Indira, Line) ->
 %% @see indira_router:command/3
 command(Indira, RoutingKey, Line) ->
   indira_router:command(Indira, RoutingKey, Line).
-
-%% }}}
-%%----------------------------------------------------------
-%% logging (unified) {{{
-
-%% @doc Send info report about an event to {@link error_logger}.
-%%   The report is formatted uniformly for Indira.
-log_info(InfoType, Context) ->
-  error_logger:info_report([{indira_info, InfoType} | Context]).
-
-%% @doc Send error report about an error to {@link error_logger}.
-%%   The report is formatted uniformly for Indira.
-%%
-%%   This function is intended for use with single `{error,Reason}' tuple.
-%%
-%%   Such error is something that generally shouldn't happen, but if it does,
-%%   it has limited scope (e.g. command line parse error for a single client).
-log_error(ErrorType, ErrorReason, Context) ->
-  error_logger:warning_report(
-    [{indira_error, ErrorType}, {error, ErrorReason} | Context]
-  ).
-
-%% @doc Send error report about an error to {@link error_logger}.
-%%   The report is formatted uniformly for Indira.
-%%
-%%   This function is intended for use when no single `{error,Reason}' tuple
-%%   is present (e.g. when multiple errors occurred).
-%%
-%%   Such error is something that generally shouldn't happen, but if it does,
-%%   it has limited scope (e.g. command line parse error for a single client).
-log_error(ErrorType, Context) ->
-  error_logger:warning_report([{indira_error, ErrorType} | Context]).
-
-%% @doc Send log report about severe error to {@link error_logger}.
-%%   The report is formatted uniformly for Indira.
-%%
-%%   This function is intended for use with single `{error,Reason}' tuple.
-%%
-%%   For severe errors, like inability to listen on a specified port.
-log_critical(ErrorType, ErrorReason, Context) ->
-  error_logger:error_report(
-    [{indira_error, ErrorType}, {error, ErrorReason} | Context]
-  ).
-
-%% @doc Send log report about severe error to {@link error_logger}.
-%%   The report is formatted uniformly for Indira.
-%%
-%%   This function is intended for use when no single `{error,Reason}' tuple
-%%   is present (e.g. when multiple errors occurred).
-%%
-%%   For severe errors, like inability to listen on a specified port.
-log_critical(ErrorType, Context) ->
-  error_logger:error_report([{indira_error, ErrorType} | Context]).
-
-%% }}}
-%%----------------------------------------------------------
 
 %%%---------------------------------------------------------------------------
 %%% vim:ft=erlang:foldmethod=marker

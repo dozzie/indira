@@ -71,8 +71,8 @@ handle_info({tcp, Socket, Line} = _Msg, State = #state{socket = Socket}) ->
       {ok, Sockname} = inet:sockname(Socket),
       {ok, Peername} = inet:peername(Socket),
       Client = {tcp, Sockname, Peername},
-      gen_indira_listener:log_error(bad_command_line, Reason,
-                                    [{command_line, Line}, {client, Client}]),
+      indira_log:error(bad_command_line, Reason,
+                       [{command_line, Line}, {client, Client}]),
       {stop, bad_command_line, State}
   end;
 
