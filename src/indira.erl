@@ -598,15 +598,28 @@ distributed(Name, NameType) ->
   net_kernel:start([Name, NameType]).
 
 %% @doc Configure Erlang networking (distributed Erlang).
-%% @TODO Support for `{file, CookieFile}'
-distributed(Name, NameType, Cookie) ->
+%%
+%%   When providing cookie in the form of `{file,Path}', only the first line
+%%   (with `"\n"' stripped) will be used as cookie.
+%%
+%% @spec distributed(node(), shortnames | longnames,
+%%                   atom() | string() | binary() | {file, Path::string()}) ->
+%%   true
+
+distributed(Name, NameType, {file, CookieFile} = _Cookie) ->
+  {ok, CookieFileContent} = file:read_file(CookieFile),
+  [CookieBin | _] = binary:split(CookieFileContent, <<"\n">>),
+  distributed(Name, NameType, CookieBin);
+
+distributed(Name, NameType, Cookie) when is_list(Cookie) ->
+  distributed(Name, NameType, list_to_atom(Cookie));
+
+distributed(Name, NameType, Cookie) when is_binary(Cookie) ->
+  distributed(Name, NameType, binary_to_atom(Cookie, utf8));
+
+distributed(Name, NameType, Cookie) when is_atom(Cookie) ->
   net_kernel:start([Name, NameType]),
-  CookieAtom = case Cookie of
-    _ when is_atom(Cookie)   -> Cookie;
-    _ when is_list(Cookie)   -> list_to_atom(Cookie);
-    _ when is_binary(Cookie) -> binary_to_atom(Cookie, utf8)
-  end,
-  erlang:set_cookie(node(), CookieAtom).
+  erlang:set_cookie(node(), Cookie).
 
 %% }}}
 %%----------------------------------------------------------
