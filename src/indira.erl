@@ -187,6 +187,8 @@
 %%% @TODO Pre-format standard OTP logs.
 %%% @TODO Add some channel-defined context to commands (e.g. for operation
 %%%   logging).
+%%% @TODO Don't crash BEAM when Indira failed to start. Rather, provide means
+%%%   to detect it in startup script.
 %%%
 %%% @see indira_tcp
 %%% @see indira_udp
