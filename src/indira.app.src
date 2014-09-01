@@ -1,6 +1,6 @@
 {application, indira, [
   {description, ""},
-  {vsn, "0.0.1"},
+  {vsn, "0.0.2"},
   {registered, [indira_router]},
   {applications, [kernel, stdlib]},
   {mod, {indira_app, []}},
