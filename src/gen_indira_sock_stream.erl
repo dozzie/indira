@@ -40,7 +40,7 @@
 %  | {error, Reason}
 %'''
 %%%       Make `Pid' to be the controlling process ("owner") of the
-%%%       `Connection'.
+%%%       `Connection'. Also, good place to make `Connection' active.
 %%%     </li>
 %%%     <li>
 %```
