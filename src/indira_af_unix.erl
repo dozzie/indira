@@ -1,66 +1,63 @@
 %%%---------------------------------------------------------------------------
 %%% @doc
-%%%   Module that imitates multiple connections.
+%%%   Module for working with AF_UNIX connections.
+%%%   The module mimics {@link gen_tcp} behaviour.
+%%%
+%%%   Active socket sends:
+%%%   <ul>
+%%%     <li>`{unix, Socket, Data :: binary()}'</li>
+%%%     <li>`{unix_closed, Socket}'</li>
+%%%     <li>`{unix_error, Socket, Reason}'</li>
+%%%   </ul>
+%%%
+%%%   @TODO Rewrite recv(), because it's fugly.
+%%%   @TODO Add `{active, once}' option
+%%%   @TODO Add `list' option.
+%%%   @TODO Add `{packet, X}' option.
 %%% @end
 %%%---------------------------------------------------------------------------
 
 -module(indira_af_unix).
 
--behaviour(gen_server).
-
-%% gen_server callbacks
--export([init/1, terminate/2]).
--export([handle_call/3, handle_cast/2, handle_info/2]).
--export([code_change/3]).
-
 %% server socket API
--export([listen/1, accept/1, accept/2, close/1]).
+-export([listen/1, accept/1, accept/2]).
+%% connection socket API
+-export([connect/2, send/2, recv/2, recv/3]).
+-export([controlling_process/2, setopts/2]).
+%% common to server and connection sockets
+-export([close/1]).
 
-%% API for clients
--export([c_send/2]).
-
--export_type([server_socket/0, connection_socket/0]).
-
-%%%---------------------------------------------------------------------------
-
--define(POLL_INTERVAL, 100).
-
--record(state, {
-  port,  % port driver handle
-  owner, % process to die with
-  fd_queue = queue:new(), % FDs waiting for accept()
-  fd  = dict:new(), % FD -> PID
-  pid = dict:new()  % PID -> FD
-}).
+-export_type([socket/0]).
 
 %%%---------------------------------------------------------------------------
 
-%% @type server_socket() = pid().
-%%   Server socket handler (process running this module).
+-define(PORT_DRIVER_NAME, "af_unix_drv").
+-define(APP_NAME, indira).
 
--type server_socket() :: pid().
+-define(LOOP_INTERVAL, 100). % 100ms
 
-%% @type connection_socket() = pid().
-%%   Client connection handler (process running
-%%   {@link indira_af_unix_connection}).
-
--type connection_socket() :: pid().
+-define(PORT_COMMAND_ACCEPT,          133).
+-define(PORT_COMMAND_RECV,            135).
+-define(PORT_COMMAND_SET_ACTIVE,      136).
+-define(PORT_COMMAND_SET_PASSIVE,     137).
 
 %%%---------------------------------------------------------------------------
-%%% API for clients
-%%%---------------------------------------------------------------------------
 
-%% @private
-%% @doc Send payload to appropriate unix socket.
-%%
-%% @spec c_send(server_socket(), iolist()) ->
-%%   ok
+%% @type socket() = port().
 
--spec c_send(server_socket(), iolist()) ->
-  ok.
+-type socket() :: port().
 
-c_send(SockPid, Payload) ->
-  gen_server:cast(SockPid, {send, self(), Payload}).
+%% @type connection_socket() = socket().
+
+-type connection_socket() :: socket().
+
+%% @type server_socket() = socket().
+
+-type server_socket() :: socket().
+
+%% @type option() = {active, true | false}.
+
+-type option() :: {active, true | false}.
 
 %%%---------------------------------------------------------------------------
 %%% server socket API
@@ -69,24 +66,16 @@ c_send(SockPid, Payload) ->
 %% @doc Setup a socket listening on specified address.
 %%
 %% @spec listen(string()) ->
-%%   {ok, server_socket()}
+%%   {ok, server_socket()} | {error, Reason}
 
 -spec listen(string()) ->
-  {ok, server_socket()}.
+  {ok, server_socket()} | {error, term()}.
 
 listen(Address) ->
-  case gen_server:start(?MODULE, {Address, self()}, []) of
-    {ok, Pid} ->
-      link(Pid),
-      {ok, Pid};
-    {error, Reason} ->
-      {error, Reason}
-  end.
+  spawn_driver(listen, Address).
 
 %% @doc Accept a client connection.
 %%   The function waits infinitely for a client.
-%%
-%%   To work with returned socket, see {@link indira_af_unix_connection}.
 %%
 %% @spec accept(server_socket()) ->
 %%   {ok, connection_socket()} | {error, Reason}
@@ -94,19 +83,16 @@ listen(Address) ->
 -spec accept(server_socket()) ->
   {ok, connection_socket()} | {error, term()}.
 
-accept(SockPid) ->
-  case gen_server:call(SockPid, {accept}) of
-    {ok, Pid} -> {ok, Pid};
+accept(Socket) ->
+  case try_accept(Socket) of
+    {ok, Client} ->
+      {ok, Client};
     nothing ->
-      timer:sleep(50),
-      accept(SockPid);
-    {error, Reason} ->
-      {error, Reason}
+      timer:sleep(?LOOP_INTERVAL),
+      accept(Socket)
   end.
 
 %% @doc Accept a client connection.
-%%
-%%   To work with returned socket, see {@link indira_af_unix_connection}.
 %%
 %% @spec accept(server_socket(), non_neg_integer()) ->
 %%   {ok, connection_socket()} | {error, timeout} | {error, Reason}
@@ -114,191 +100,237 @@ accept(SockPid) ->
 -spec accept(server_socket(), non_neg_integer()) ->
   {ok, connection_socket()} | {error, timeout} | {error, term()}.
 
-accept(_SockPid, Timeout) when Timeout =< 0 ->
-  {error, timeout};
+accept(Socket, Timeout) when Timeout =< 0 ->
+  case try_accept(Socket) of
+    {ok, Client} -> {ok, Client};
+    nothing -> {error, timeout}
+  end;
 
-accept(SockPid, Timeout) when Timeout > 0 ->
-  Sleep = if
-    Timeout >= 50 -> 50;
-    Timeout < 50 -> Timeout
-  end,
-  case gen_server:call(SockPid, {accept}) of
-    {ok, Pid} -> {ok, Pid};
+accept(Socket, Timeout) when Timeout =< ?LOOP_INTERVAL ->
+  case try_accept(Socket) of
+    {ok, Client} ->
+      {ok, Client};
     nothing ->
-      timer:sleep(Sleep),
-      accept(SockPid, Timeout - Sleep);
+      timer:sleep(Timeout),
+      accept(Socket, 0)
+  end;
+
+accept(Socket, Timeout) when Timeout > ?LOOP_INTERVAL ->
+  case try_accept(Socket) of
+    {ok, Client} ->
+      {ok, Client};
+    nothing ->
+      timer:sleep(?LOOP_INTERVAL),
+      accept(Socket, Timeout - ?LOOP_INTERVAL)
+  end.
+
+%%%---------------------------------------------------------------------------
+%%% connection socket
+%%%---------------------------------------------------------------------------
+
+%% @doc Connect to specified socket.
+%%   Resulting connection defaults to passive (if not specified in options).
+%%
+%%   This function allows to send to datagram sockets as well, but
+%%   {@link recv/2} and {@link recv/3} won't work on such socket.
+%%
+%% @spec connect(string(), [option()]) ->
+%%   {ok, connection_socket()} | {error, Reason}
+
+connect(Address, Opts) ->
+  case spawn_driver(connect, Address) of
+    {ok, Socket} ->
+      case setopts(Socket, Opts) of
+        ok -> {ok, Socket};
+        {error, Reason} -> {error, Reason}
+      end;
     {error, Reason} ->
       {error, Reason}
   end.
 
-%% @doc Close server connection.
+%% @doc Send data to the socket.
 %%
-%% @spec close(server_socket()) ->
-%%   ok
+%% @spec send(connection_socket(), iolist() | binary()) ->
+%%   ok | {error, Reason}
 
--spec close(server_socket()) ->
-  ok.
-
-close(SockPid) ->
-  gen_server:call(SockPid, {close}).
-
-%%%---------------------------------------------------------------------------
-%%% gen_server callbacks
-%%%---------------------------------------------------------------------------
-
-%%--------------------------------------------------------------------
-%% initialization and termination {{{
-
-%% @private
-%% @doc Initialize {@link gen_server} state.
-
-init({Address, OwnerPid} = _Args) ->
-  case indira_af_unix_driver:listen(Address) of
-    {ok, Port} ->
-      Ref = erlang:monitor(process, OwnerPid),
-      State = #state{port = Port, owner = {OwnerPid, Ref}},
-      {ok, State, ?POLL_INTERVAL};
-    {error, Reason} ->
-      {stop, Reason}
+send(Socket, Data) ->
+  try
+    port_command(Socket, Data),
+    ok
+  catch
+    error:badarg ->
+      {error, badarg}
   end.
 
-%% @private
-%% @doc Clean up {@link gen_server} state.
+%% @doc Read `Length' bytes from socket.
+%%
+%% @spec recv(connection_socket(), non_neg_integer()) ->
+%%   {ok, Packet} | {error, Reason}
 
-terminate(_Reason, _State = #state{port = Port}) ->
-  indira_af_unix_driver:close(Port),
-  ok.
+recv(Socket, Length) ->
+  case erlang:port_call(Socket, ?PORT_COMMAND_RECV, Length) of
+    {ok, Packet} ->
+      {ok, Packet};
+    nothing ->
+      timer:sleep(?LOOP_INTERVAL),
+      recv(Socket, Length);
+    {error, Reason} ->
+      {error, Reason}
+  end.
 
-%% }}}
-%%--------------------------------------------------------------------
-%% communication {{{
+%% @doc Read `Length' bytes from socket (with timeout).
+%%
+%% @spec recv(connection_socket(), non_neg_integer(),
+%%            non_neg_integer() | infinity) ->
+%%   {ok, Packet} | {error, Reason}
 
-%% @private
-%% @doc Handle {@link gen_server:call/2}.
+recv(Socket, Length, infinity = _Timeout) ->
+  recv(Socket, Length);
 
-handle_call({accept} = _Request, _From, State) ->
-  NewState = poll(State),
-  case queue:out(NewState#state.fd_queue) of
-    {{value,V}, NewQueue} ->
-      {reply, {ok, V}, NewState#state{fd_queue = NewQueue}, ?POLL_INTERVAL};
-    {empty, NewQueue} ->
-      {reply, nothing, NewState#state{fd_queue = NewQueue}, ?POLL_INTERVAL}
+recv(Socket, Length, Timeout) when Timeout =< 0 ->
+  case erlang:port_call(Socket, ?PORT_COMMAND_RECV, Length) of
+    {ok, Packet} -> {ok, Packet};
+    nothing -> {error, timeout};
+    {error, Reason} -> {error, Reason}
   end;
 
-handle_call({close} = _Request, _From, State) ->
-  {stop, normal, State};
-
-handle_call(_Request, _From, State) ->
-  {reply, ok, State, ?POLL_INTERVAL}.
-
-%% @private
-%% @doc Handle {@link gen_server:cast/2}.
-
-handle_cast({send, ConnPid, Data} = _Request,
-            State = #state{port = Port, pid = PIDMap}) ->
-  case dict:find(ConnPid, PIDMap) of
-    {ok, FD} -> indira_af_unix_driver:send(Port, FD, Data);
-    error    -> ignore
-  end,
-  {noreply, State, ?POLL_INTERVAL};
-
-handle_cast(_Request, State) ->
-  {noreply, State, ?POLL_INTERVAL}.
-
-%% @private
-%% @doc Handle incoming messages.
-
-handle_info(timeout = _Message, State) ->
-  NewState = poll(State),
-  {noreply, NewState, ?POLL_INTERVAL};
-
-%% socket owner went down
-handle_info({'DOWN', Ref, process, OwnerPid, Reason} = _Message,
-            State = #state{owner = {OwnerPid, Ref}}) ->
-  {stop, Reason, State};
-
-%% client connection was closed
-handle_info({'DOWN', _Ref, process, Pid, _Reason} = _Message,
-            State = #state{port = Port, fd = FDMap, pid = PIDMap}) ->
-  case dict:find(Pid, PIDMap) of
-    {ok, FD} ->
-      indira_af_unix_driver:close(Port, FD),
-      NewFDMap = dict:erase(FD, FDMap),
-      NewPIDMap = dict:erase(Pid, PIDMap),
-      NewState = State#state{fd = NewFDMap, pid = NewPIDMap},
-      {noreply, NewState, ?POLL_INTERVAL};
-    error ->
-      % ignore this message
-      {noreply, State, ?POLL_INTERVAL}
+recv(Socket, Length, Timeout) when Timeout =< ?LOOP_INTERVAL ->
+  case erlang:port_call(Socket, ?PORT_COMMAND_RECV, Length) of
+    {ok, Packet} ->
+      {ok, Packet};
+    nothing ->
+      timer:sleep(Timeout),
+      recv(Socket, Length, 0);
+    {error, Reason} ->
+      {error, Reason}
   end;
 
-handle_info(_Message, State) ->
-  {noreply, State, ?POLL_INTERVAL}.
+recv(Socket, Length, Timeout) when Timeout > ?LOOP_INTERVAL ->
+  case erlang:port_call(Socket, ?PORT_COMMAND_RECV, Length) of
+    {ok, Packet} ->
+      {ok, Packet};
+    nothing ->
+      timer:sleep(?LOOP_INTERVAL),
+      recv(Socket, Length, Timeout - ?LOOP_INTERVAL);
+    {error, Reason} ->
+      {error, Reason}
+  end.
 
-%% }}}
-%%--------------------------------------------------------------------
-%% code change {{{
+%% @doc Set the socket owner.
+%%
+%% @spec controlling_process(socket(), pid()) ->
+%%   ok | {error, Reason}
 
-%% @private
-%% @doc Handle code change.
+controlling_process(Socket, Pid) ->
+  try
+    Self = self(),
+    case erlang:port_info(Socket, connected) of
+      {connected, Pid} ->
+        % new owner is the same as current, do nothing
+        ok;
+      {connected, Self} ->
+        % new owner is different than current, and current is me
+        true = port_connect(Socket, Pid),
+        unlink(Socket),
+        ok;
+      {connected, _Any} ->
+        {error, not_owner}
+    end
+  catch
+    error:Reason ->
+      {error, Reason}
+  end.
 
-code_change(_OldVsn, State, _Extra) ->
-  {ok, State}.
+%% @doc Set socket options.
+%%
+%% @spec setopts(socket(), [option()]) ->
+%%   ok | {error, Reason}
 
-%% }}}
-%%--------------------------------------------------------------------
+-spec setopts(socket(), [option()]) ->
+  ok | {error, term()}.
+
+setopts(_Socket, [] = _Options) ->
+  ok;
+
+setopts(Socket, [{active, Active} | Rest] = _Options) ->
+  case Active of
+    true ->
+      ok = erlang:port_call(Socket, ?PORT_COMMAND_SET_ACTIVE, ignore),
+      setopts(Socket, Rest);
+    false ->
+      ok = erlang:port_call(Socket, ?PORT_COMMAND_SET_PASSIVE, ignore),
+      setopts(Socket, Rest);
+    _Any ->
+      {error, badarg}
+  end;
+
+setopts(_Socket, [_Any | _Rest] = _Options) ->
+  {error, badarg}.
 
 %%%---------------------------------------------------------------------------
+%%% common to server and connection
+%%%---------------------------------------------------------------------------
 
-%% @doc Check `Port' for any events and dispatch them accordingly.
-%%   For any new descriptor there will be {@link indira_af_unix_connection}
-%%   spawned and monitored.
+%% @doc Close server connection.
 %%
-%%   Function returns new file descriptors and updated process state.
+%% @spec close(socket()) ->
+%%   ok
+
+-spec close(socket()) ->
+  ok.
+
+close(Socket) ->
+  true = port_close(Socket),
+  ok.
+
+%%%---------------------------------------------------------------------------
+%%% private helpers
+%%%---------------------------------------------------------------------------
+
+%% @doc Try accepting connection.
 %%
-%% @spec poll(#state{}) ->
-%%   #state{}
+%% @spec spawn_driver(listen | connect, string()) ->
+%%   {ok, socket()} | {error, Reason}
 
-poll(State = #state{port = Port}) ->
-  % Events :: {new, FD}
-  %         | {data, FD::integer(), binary()}
-  %         | {close, FD}
-  Events = indira_af_unix_driver:poll(Port),
-  NewState = events_dispatch(Events, State),
-  NewState.
+spawn_driver(Type, Address) ->
+  DriverCommand = case Type of
+    listen  -> ?PORT_DRIVER_NAME ++ " l:" ++ Address;
+    connect -> ?PORT_DRIVER_NAME ++ " c:" ++ Address
+  end,
+  ensure_driver_loaded(),
+  try
+    Port = open_port({spawn_driver, DriverCommand}, [binary]),
+    {ok, Port}
+  catch
+    error:Reason ->
+      {error, Reason}
+  end.
 
-%% @doc Dispatch events to appropriate child processes.
+%% @doc Try accepting connection.
 %%
-%% @spec events_dispatch([indira_af_unix_driver:event()], #state{}) ->
-%%   #state{}
+%% @spec try_accept(server_socket()) ->
+%%   {ok, connection_socket()} | nothing
 
-events_dispatch([] = _Events, State) ->
-  State;
+try_accept(Socket) ->
+  case erlang:port_call(Socket, ?PORT_COMMAND_ACCEPT, ignore) of
+    {ok, nothing} ->
+      nothing;
+    {ok, client} ->
+      receive
+        {Socket, {client, Client}} ->
+          {ok, Client}
+      end
+  end.
 
-events_dispatch([{new, FD} | Rest] = _Events,
-                State = #state{fd = FDMap, pid = PIDMap, fd_queue = Queue}) ->
-  {ok, Pid, MonRef} = indira_af_unix_connection:start_monitor(),
-  NewFDMap = dict:store(FD, {Pid,MonRef}, FDMap),
-  NewPIDMap = dict:store(Pid, FD, PIDMap),
-  NewQueue = queue:in(Pid, Queue),
-  NewState = State#state{fd = NewFDMap, pid = NewPIDMap, fd_queue = NewQueue},
-  events_dispatch(Rest, NewState);
+%% @doc Ensure the port driver library is loaded.
+%%
+%% @spec ensure_driver_loaded() ->
+%%   ok
 
-events_dispatch([{data, FD, Data} | Rest] = _Events,
-                State = #state{fd = FDMap}) ->
-  {ok, {Pid,_MonRef}} = dict:find(FD, FDMap),
-  indira_af_unix_connection:c_data(Pid, Data),
-  events_dispatch(Rest, State);
-
-events_dispatch([{close, FD} | Rest] = _Events,
-                State = #state{fd = FDMap, pid = PIDMap}) ->
-  {ok, {Pid,MonRef}} = dict:find(FD, FDMap),
-  erlang:demonitor(MonRef, [flush]),
-  indira_af_unix_connection:c_eof(Pid),
-  NewFDMap = dict:erase(FD, FDMap),
-  NewPIDMap = dict:erase(Pid, PIDMap),
-  NewState = State#state{fd = NewFDMap, pid = NewPIDMap},
-  events_dispatch(Rest, NewState).
+ensure_driver_loaded() ->
+  PrivDir = code:lib_dir(?APP_NAME, priv),
+  ok = erl_ddll:load_driver(PrivDir, ?PORT_DRIVER_NAME),
+  ok.
 
 %%%---------------------------------------------------------------------------
 %%% vim:ft=erlang:foldmethod=marker

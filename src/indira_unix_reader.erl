@@ -40,7 +40,7 @@ init({CommandRouter, ClientSocket} = _Args) ->
 
 %% @doc Clean up {@link gen_server} state.
 terminate(_Reason, _State = #state{socket = Socket}) ->
-  indira_af_unix_connection:close(Socket),
+  indira_af_unix:close(Socket),
   ok.
 
 %% @doc Handle code change.
@@ -74,7 +74,7 @@ handle_info({unix, Socket, Line} = _Msg, State = #state{socket = Socket}) ->
   end;
 
 handle_info({result, Line} = _Msg, State = #state{socket = Socket}) ->
-  indira_af_unix_connection:send(Socket, [Line, "\n"]),
+  indira_af_unix:send(Socket, [Line, "\n"]),
   {noreply, State};
 
 handle_info(_Msg, State = #state{}) ->

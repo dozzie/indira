@@ -77,9 +77,10 @@ accept(State = #state{router = CommandRouter, socket = Socket}) ->
   ok | {error, term()}.
 
 controlling_process({_CommandRouter, Connection} = _ChildState, Pid) ->
-  case indira_af_unix_connection:controlling_process(Connection, Pid) of
+  case indira_af_unix:controlling_process(Connection, Pid) of
     ok ->
-      ok;
+      % once the socket has proper owner, make it active
+      indira_af_unix:setopts(Connection, [{active, true}]);
     {error, Reason} ->
       {error, Reason}
   end.
