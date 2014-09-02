@@ -20,10 +20,13 @@
 
 %%%---------------------------------------------------------------------------
 
-%% @type connection() = {CommandRouter :: pid(),
-%%                        indira_af_unix:connection_socket()}.
+%% @type command_router() = pid() | atom().
 
--type connection() :: {pid(), indira_af_unix:connection_socket()}.
+-type command_router() :: pid() | atom().
+
+%% @type connection() = {command_router(), indira_af_unix:connection_socket()}.
+
+-type connection() :: {command_router(), indira_af_unix:connection_socket()}.
 
 %%%---------------------------------------------------------------------------
 %%% gen_indira_sock_stream callbacks
@@ -31,10 +34,10 @@
 
 %% @doc Prepare listening socket.
 %%
-%% @spec listen({CommandRouter :: pid(), SocketPath :: string()}) ->
+%% @spec listen({command_router(), SocketPath :: string()}) ->
 %%   {ok, State :: #state{}} | {error, Reason}
 
--spec listen({pid(), string()}) ->
+-spec listen({command_router(), string()}) ->
   {ok, #state{}} | {error, term()}.
 
 listen({CommandRouter, SocketPath} = _Args) ->
