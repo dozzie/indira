@@ -1,6 +1,8 @@
 %%%---------------------------------------------------------------------------
 %%% @doc
 %%%   Indira syslog connection handles and message formatting.
+%%%
+%%% @TODO Make the port survive syslog restarts.
 %%% @end
 %%%---------------------------------------------------------------------------
 
@@ -18,7 +20,6 @@
 
 %% for code:lib_dir/2
 -define(APP_NAME, indira).
--define(BINARY_NAME, "syslog_helper").
 
 %%%---------------------------------------------------------------------------
 %%% data types {{{
@@ -259,13 +260,8 @@ facility(local7)   -> 23. % reserved for local use
   connection().
 
 open_local(SocketPath) ->
-  PrivDir = code:lib_dir(?APP_NAME, priv),
-  PortExecutable = filename:join(PrivDir, ?BINARY_NAME),
-  Port = open_port(
-    {spawn_executable, PortExecutable},
-    [stream, {args, [SocketPath]}, {cd, "/"}]
-  ),
-  {port, Port}.
+  {ok, Socket} = indira_af_unix:connect(SocketPath, [{active, false}]),
+  {unix, Socket}.
 
 %% @doc Open connection to remote syslog (UDP).
 %%
@@ -300,8 +296,8 @@ open_remote(Host, Port) when is_tuple(Host) ->
 -spec send(connection(), iolist()) ->
   ok.
 
-send({port, Port} = _Syslog, Message) ->
-  port_command(Port, [Message, "\n"]),
+send({unix, Socket} = _Syslog, Message) ->
+  indira_af_unix:send(Socket, [Message, "\n"]),
   ok;
 
 send({udp, Socket, {Host, Port}} = _Syslog, Message) ->
@@ -320,8 +316,8 @@ send({udp, Socket, {Host, Port}} = _Syslog, Message) ->
 -spec close(connection()) ->
   ok.
 
-close({port, Port} = _Syslog) ->
-  port_close(Port),
+close({unix, Socket} = _Syslog) ->
+  indira_af_unix:close(Socket),
   ok;
 
 close({udp, Socket, {_Host, _Port}} = _Syslog) ->
