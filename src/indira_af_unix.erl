@@ -279,8 +279,15 @@ setopts(_Socket, [_Any | _Rest] = _Options) ->
 -spec close(socket()) ->
   ok.
 
-close(Socket) ->
-  true = port_close(Socket),
+close(Socket) when is_port(Socket) ->
+  try
+    unlink(Socket),
+    port_close(Socket)
+  catch
+    % this could be caused by port already being closed, which is expected for
+    % `{active,true}' sockets
+    error:badarg -> ignore
+  end,
   ok.
 
 %%%---------------------------------------------------------------------------
