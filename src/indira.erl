@@ -647,12 +647,22 @@ distributed(Name, NameType) ->
 %%
 %% @spec distributed(node(), shortnames | longnames,
 %%                   atom() | string() | binary() | {file, Path::string()}) ->
-%%   true
+%%   ok | {error, Reason}
 
 distributed(Name, NameType, {file, CookieFile} = _Cookie) ->
-  {ok, CookieFileContent} = file:read_file(CookieFile),
-  [CookieBin | _] = binary:split(CookieFileContent, <<"\n">>),
-  distributed(Name, NameType, CookieBin);
+  case file:read_file(CookieFile) of
+    {ok, <<>>} ->
+      {error, no_cookie};
+    {ok, <<"\n", _/binary>>} ->
+      {error, no_cookie};
+    {ok, <<"\r\n", _/binary>>} ->
+      {error, no_cookie};
+    {ok, CookieFileContent} ->
+      [CookieBin | _] = binary:split(CookieFileContent, <<"\n">>),
+      distributed(Name, NameType, CookieBin);
+    {error, Reason} ->
+      {error, Reason}
+  end;
 
 distributed(Name, NameType, Cookie) when is_list(Cookie) ->
   distributed(Name, NameType, list_to_atom(Cookie));
@@ -661,8 +671,13 @@ distributed(Name, NameType, Cookie) when is_binary(Cookie) ->
   distributed(Name, NameType, binary_to_atom(Cookie, utf8));
 
 distributed(Name, NameType, Cookie) when is_atom(Cookie) ->
-  net_kernel:start([Name, NameType]),
-  erlang:set_cookie(node(), Cookie).
+  case net_kernel:start([Name, NameType]) of
+    {ok, _NetSupPid} ->
+      erlang:set_cookie(node(), Cookie),
+      ok;
+    {error, Reason} ->
+      {error, Reason}
+  end.
 
 %% }}}
 %%----------------------------------------------------------
