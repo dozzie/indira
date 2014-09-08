@@ -21,7 +21,7 @@
 
 %% @doc Start the supervisor process.
 start_link() ->
-  supervisor:start_link(?MODULE, []).
+  supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 %%%---------------------------------------------------------------------------
 %%% supervisor callbacks
