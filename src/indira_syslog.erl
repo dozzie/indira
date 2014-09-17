@@ -254,35 +254,41 @@ facility(local7)   -> 23. % reserved for local use
 %% @doc Open connection to local syslog.
 %%
 %% @spec open_local(string()) ->
-%%   connection()
+%%   {ok, connection()} | {error, Reason}
 
 -spec open_local(string()) ->
-  connection().
+  {ok, connection()} | {error, term}.
 
 open_local(SocketPath) ->
-  {ok, Socket} = indira_af_unix:connect(SocketPath, [{active, false}]),
-  {unix, Socket}.
+  case indira_af_unix:connect(SocketPath, [{active, false}]) of
+    {ok, Socket}    -> {ok, {unix, Socket}};
+    {error, Reason} -> {error, Reason}
+  end.
 
 %% @doc Open connection to remote syslog (UDP).
 %%
 %% @spec open_remote(inet:hostname() | inet:ip_address(),
-%%                          integer() | default) ->
-%%   connection()
+%%                   integer() | default) ->
+%%   {ok, connection()} | {error, Reason}
 
 -spec open_remote(inet:hostname() | inet:ip_address(),
-                         integer() | default) ->
-  connection().
+                  integer() | default) ->
+  {ok, connection()} | {error, term()}.
 
 open_remote(Host, default = _Port) ->
   open_remote(Host, 514);
 
 open_remote(Host, Port) when is_atom(Host); is_list(Host) ->
-  {ok, Addr} = inet:getaddr(Host, inet),
-  open_remote(Addr, Port);
+  case inet:getaddr(Host, inet) of
+    {ok, Addr}      -> open_remote(Addr, Port);
+    {error, Reason} -> {error, Reason}
+  end;
 
 open_remote(Host, Port) when is_tuple(Host) ->
+  % would be very strange if there was a problem with this
   {ok, Socket} = gen_udp:open(0),
-  {udp, Socket, {Host, Port}}.
+  Connection = {udp, Socket, {Host, Port}},
+  {ok, Connection}.
 
 %% }}}
 %%----------------------------------------------------------
@@ -291,18 +297,16 @@ open_remote(Host, Port) when is_tuple(Host) ->
 %% @doc Send a line to syslog.
 %%
 %% @spec send(connection(), iolist()) ->
-%%   ok
+%%   ok | {error, Reason}
 
 -spec send(connection(), iolist()) ->
-  ok.
+  ok | {error, term()}.
 
 send({unix, Socket} = _Syslog, Message) ->
-  indira_af_unix:send(Socket, [Message, "\n"]),
-  ok;
+  indira_af_unix:send(Socket, [Message, "\n"]);
 
 send({udp, Socket, {Host, Port}} = _Syslog, Message) ->
-  gen_udp:send(Socket, Host, Port, Message),
-  ok.
+  gen_udp:send(Socket, Host, Port, Message).
 
 %% }}}
 %%----------------------------------------------------------
