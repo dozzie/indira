@@ -311,7 +311,10 @@ void unix_sock_driver_output(ErlDrvData drv_data, char *buf, erl_size_t len)
   if (context->type == entry_client) {
     // just assume this won't block
     // TODO: driver_enq(), driver_deq()
-    write(context->fd, buf, len);
+    if (write(context->fd, buf, len) < 0)
+      // I see no better way to signal that there was an error
+      // (driver_failure_posix() just kills the port owner)
+      driver_failure_eof(context->erl_port);
   } else { // context->type == entry_server
     // TODO: error
   }
