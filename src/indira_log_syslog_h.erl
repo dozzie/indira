@@ -166,6 +166,17 @@ handle_event({error_report, _GLead, {Pid, Type, Report}} = _Event, State) ->
               {supervisor, supervisor_info(Pid, SupId)},
               {child, child_info(ChildProps)}]);
 
+    {supervisor_report, [{supervisor, {_SupPid, _SupName} = SupId},
+                          {errorContext, shutdown},
+                          {reason, Reason}, {offender, ChildProps}]} ->
+      % supervisor is going down because one child (the offender) was
+      % restarted more often than supervisor's max frequency (at least this is
+      % the most probable reason; see `Reason')
+      oplog(State, err, "supervisor shut down",
+            [{reason, normalize_reason(Reason)},
+              {supervisor, supervisor_info(Pid, SupId)},
+              {child, child_info(ChildProps)}]);
+
     {std_error, [{indira_error, MsgType} | Context]} ->
       oplog(State, crit, MsgType, [{context, Context}]);
 
