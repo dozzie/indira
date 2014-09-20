@@ -600,12 +600,17 @@ register_log_dest(DaemonName, {stderr,color}) ->
 register_log_dest(_DaemonName, {file, _Filename}) ->
   {error, {not_implemented,file}}; % TODO
 
-%% syslog log destination
+%% local syslog (/dev/log)
 register_log_dest(DaemonName, syslog) ->
-  Options = [{facility, daemon}, {ident, DaemonName}],
+  Options = [DaemonName, daemon],
   error_logger:add_report_handler(indira_log_syslog_h, Options);
-register_log_dest(DaemonName, {syslog, Destination}) ->
-  Options = [{remote, Destination}, {facility, daemon}, {ident, DaemonName}],
+%% remote syslog (host+port)
+register_log_dest(DaemonName, {syslog, {_Host, _Port} = Destination}) ->
+  Options = [DaemonName, daemon, Destination],
+  error_logger:add_report_handler(indira_log_syslog_h, Options);
+%% remote syslog (host, default port)
+register_log_dest(DaemonName, {syslog, Host}) ->
+  Options = [DaemonName, daemon, {Host, default}],
   error_logger:add_report_handler(indira_log_syslog_h, Options);
 
 %% lager
