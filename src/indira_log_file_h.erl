@@ -241,7 +241,7 @@ oplog(State, Priority, Event, Context) when is_binary(Event); is_atom(Event) ->
 oplog(State = #state{ident = Ident, fh = FH}, Priority, Msg) ->
   Line = [
     fmtime(), "\t",
-    fmtident(Ident), "\t",
+    fmtident(Ident), "[", os:getpid(), "]", "\t",
     fmtprio(Priority), "\t",
     fmtmsg(Msg), "\n"
   ],
