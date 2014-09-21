@@ -22,6 +22,7 @@
 %%% @TODO Send events with stack trace somewhere to log detailed details.
 %%% @TODO Re-resolve remote syslog address on request.
 %%% @TODO Log JSON messages and raw lines.
+%%% @TODO Unify `supervisor_report' reports.
 %%%
 %%% @end
 %%%---------------------------------------------------------------------------
@@ -177,6 +178,16 @@ handle_event({error_report, _GLead, {Pid, Type, Report}} = _Event, State) ->
               {supervisor, supervisor_info(Pid, SupId)},
               {child, child_info(ChildProps)}]);
 
+    {supervisor_report, [{supervisor, {_SupPid, _SupName} = SupId},
+                          {errorContext, shutdown_error},
+                          {reason, Reason}, {offender, ChildProps}]} ->
+      % supervisor was going down, but there was a problem (e.g. child didn't
+      % respond within expected time to shutdown signal)
+      oplog(State, err, "supervisor shutdown error",
+            [{reason, normalize_reason(Reason)},
+              {supervisor, supervisor_info(Pid, SupId)},
+              {child, child_info(ChildProps)}]);
+
     {std_error, [{indira_error, MsgType} | Context]} ->
       oplog(State, crit, MsgType, [{context, Context}]);
 
@@ -235,8 +246,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%----------------------------------------------------------
 
-%% @doc Send event with context (proplist) to syslog (local through {@link
-%%   indira_syslog} or remote).
+%% @doc Send event with context (proplist) to syslog (local or remote).
 %%
 %% @spec oplog(#state{}, indira_syslog:priority(),
 %%             atom() | string() | binary(), list()) ->
@@ -248,8 +258,7 @@ oplog(State, Priority, Event, Context) when is_list(Event) ->
 oplog(State, Priority, Event, Context) when is_binary(Event); is_atom(Event) ->
   oplog(State, Priority, [{event, Event} | Context]).
 
-%% @doc Send message (any term) to syslog (local through {@link indira_syslog}
-%%   or remote).
+%% @doc Send message (any term) to syslog (local or remote).
 %%
 %% @spec oplog(#state{}, indira_syslog:priority(), term()) ->
 %%   {ok, State}
