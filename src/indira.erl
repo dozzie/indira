@@ -597,8 +597,9 @@ register_log_dest(DaemonName, {stderr,color}) ->
   register_log_dest(DaemonName, {stderr,colour});
 
 %% file log destination
-register_log_dest(_DaemonName, {file, _Filename}) ->
-  {error, {not_implemented,file}}; % TODO
+register_log_dest(DaemonName, {file, Filename}) ->
+  Options = [DaemonName, Filename],
+  error_logger:add_report_handler(indira_log_file_h, Options);
 
 %% local syslog (/dev/log)
 register_log_dest(DaemonName, syslog) ->
