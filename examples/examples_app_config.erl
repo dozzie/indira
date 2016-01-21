@@ -9,7 +9,7 @@
 %%% ```
 %%% $ erl \
 %%%     -indira listen '[{indira_tcp, {any,5500}}]' \
-%%%     -indira commander example_command_executor \
+%%%     -indira command example_command_handler \
 %%%     -s indira \
 %%%     other args ...
 %%% '''
@@ -19,8 +19,8 @@
 %%%
 %%%   This migt be useful trick for injecting Indira to already written
 %%%   services, e.g. to provide additional instrumentation. Note that
-%%%   `example_command_executor' doesn't even need to come from original
-%%%   service -- it could be custom module.
+%%%   `example_command_handler' doesn't even need to come from original
+%%%   service -- it could be a custom module.
 %%%
 %%% == Setup with `-config myapp.config' ==
 %%%
@@ -37,8 +37,7 @@
 %%%       {indira_tcp, {"localhost", 16667}},
 %%%       {indira_unix, "/var/run/my_app.sock"}
 %%%     ]},
-%%%     % there should be process registered as `my_app_command'
-%%%     {commander, my_app_command}
+%%%     {command, my_app_command}
 %%%   ]},
 %%%   % ...
 %%% ].
@@ -48,48 +47,43 @@
 %%%
 %%% === Indira API ===
 %%%
-%%% ```
-%%% #!/usr/bin/escript
-%%%
-%%% main(_Args) ->
-%%%   Pid = spawn(fun() -> command_executor() end),
-%%%   % these two calls are enough to configure Indira in Erlang code
-%%%   indira:set_option(indira, listen, [{indira_tcp, {any, 5500}}]),
-%%%   indira:set_option(indira, commander, Pid),
-%%%   indira:setup_logging(my_app, [stdout]),
-%%%   indira:start_rec(indira),
-%%%   indira:sleep_forever().
-%%%
-%%% % simple and dumb command executor
-%%% command_executor() ->
-%%%   receive
-%%%     {command, ReplyTo, ChannelID, Command} ->
-%%%       io:fwrite("got command ~p~n", [Command]),
-%%%       ReplyTo ! {result, ChannelID, unsupported};
-%%%     _Any ->
-%%%       ignore
-%%%   end,
-%%%   command_executor().
-%%% '''
+%```
+%#!/usr/bin/escript
+%
+%main(_Args) ->
+%  % these two calls are enough to configure Indira in Erlang code
+%  indira:set_option(indira, listen, [{indira_tcp, {any, 5500}}]),
+%  indira:set_option(indira, command, fun(C) -> handle_command(C) end),
+%  indira:setup_logging(my_app, [stdout]),
+%  indira:start_rec(indira),
+%  indira:sleep_forever().
+%
+% % simple and dumb command handler
+%handle_command(<<"stop">> = _Command) ->
+%  init:stop(),
+%  ok;
+%handle_command(Command) ->
+%  io:fwrite("got command ~p~n", [Command]),
+%  unsupported.
+%'''
 %%%
 %%% === application:set_env/3 ===
 %%%
-%%% ```
-%%% #!/usr/bin/escript
-%%%
-%%% main(_Args) ->
-%%%   Pid = spawn(fun() -> command_executor() end),
-%%%   % this is an alternative to indira:set_option/3
-%%%   % note that application needs to be loaded for application:set_env/3
-%%%   application:load(indira),
-%%%   application:set_env(indira, listen, [{indira_tcp, {any, 5500}}]),
-%%%   application:set_env(indira, commander, Pid),
-%%%   % rest is the same as in the example above
-%%%   indira:setup_logging(my_app, [stdout]),
-%%%   indira:start_rec(indira),
-%%%   indira:sleep_forever().
-%%% % ...
-%%% '''
+%```
+%#!/usr/bin/escript
+%
+%main(_Args) ->
+%  % this is an alternative to indira:set_option/3
+%  % note that application needs to be loaded for application:set_env/3
+%  application:load(indira),
+%  application:set_env(indira, listen, [{indira_tcp, {any, 5500}}]),
+%  application:set_env(indira, command, fun(C) -> handle_command(C) end),
+%  % rest is the same as in the example above
+%  indira:setup_logging(my_app, [stdout]),
+%  indira:start_rec(indira),
+%  indira:sleep_forever().
+% % ...
+%'''
 %%%
 %%% @end
 %%%---------------------------------------------------------------------------

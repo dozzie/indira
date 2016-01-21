@@ -10,11 +10,10 @@
 %%%   This module expects a tuple `{Host,Port}' as a parameter (see
 %%%   {@link indira}). The `Host' part can be:
 %%%   <ul>
-%%%     <li>`string()'</li>
-%%%     <li>`inet:ip_address()' (i.e. `{N1,N2,N3,N4}' for IPv4)</li>
+%%%     <li>{@type inet:hostname()}</li>
+%%%     <li>{@type inet:ip_address()} (i.e. `{N1,N2,N3,N4}' for IPv4)</li>
 %%%     <li>`` 'any' '' to indicate no binding to any particular interface</li>
 %%%   </ul>
-%%%
 %%% @end
 %%%---------------------------------------------------------------------------
 
@@ -23,7 +22,7 @@
 -behaviour(gen_indira_listener).
 
 %% Indira listener API
--export([child_spec/2]).
+-export([child_spec/1]).
 
 %%%---------------------------------------------------------------------------
 %%% Indira listener API
@@ -32,11 +31,11 @@
 %% @private
 %% @doc Listener description.
 
-child_spec(CmdRouter, {_Host,_Port} = BindAddr) ->
+child_spec({_Host,_Port} = BindAddr) ->
   SockStreamSupArgs = [
     indira_tcp_listener,
     {indira_tcp_reader, start_link},
-    {CmdRouter, BindAddr}
+    BindAddr
   ],
   {ignore,
     {indira_sock_stream_sup, start_link, SockStreamSupArgs},

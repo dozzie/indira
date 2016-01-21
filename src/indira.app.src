@@ -1,11 +1,21 @@
 {application, indira, [
   {description, ""},
-  {vsn, "0.0.2"},
-  {registered, [indira_sup, indira_listener_sup, indira_router]},
+  {vsn, "0.2.0"},
+  {registered, [
+    indira_sup,
+    indira_command_sup,
+    indira_commander,
+    indira_listener_sup,
+    indira_dist_erl,
+    indira_pidfile
+  ]},
   {applications, [kernel, stdlib]},
   {mod, {indira_app, []}},
   {env, [
-    %{commander, undefined},
+    %{command, Callback :: fun() | {fun(), term()} | {module(), term()}},
+    %{pidfile, Path :: file:filename()},
+    %{net, {Node :: atom(), NameType :: shortnames | longnames, Cookie :: atom() | none}},
+    {net_start, false},
     {listen, []}
   ]}
 ]}.

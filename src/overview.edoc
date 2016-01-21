@@ -1,8 +1,8 @@
 @author Stanislaw Klekot <dozzie@jarowit.net>
 @title Indira, Mother of D(a)emons.
-@version 0.0.2
+@version 0.2.0
 @see indira
-@see gen_indira_listener
+@see gen_indira_command
 @doc
 
 Indira is an application for turning Erlang applications into unix daemons
@@ -51,13 +51,14 @@ instrumentation, logging, monitoring probes and so on. See
 
 There is an additional, optional -- although highly recommended -- subsystem
 of issuing commands to the daemonized application. From the application it
-requires a {@link examples_command_executor. command executor} process, which
-receives messages of specific structure and replies to them with other
-messages (see {@link indira} module for protocol details). Still, an
-application doesn't need to know about Indira.
+requires a {@link examples_command_handler. command handler} to be specified.
+Such handler receives messages of {@link indira_json:struct(). jsx-like
+structure} and replies to them with other messages (see {@link
+gen_indira_command} module for details). Still, an application doesn't need to
+know about Indira.
 
-In fact, the application doesn't even need to include command executor. It
-could be written separately, as long as it knows how to talk to the
+In fact, the application doesn't even need to include command handler module.
+It could be written separately, as long as it knows how to talk to the
 application.
 
 Indira on its part will start several so called

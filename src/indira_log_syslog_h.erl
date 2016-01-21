@@ -1,13 +1,14 @@
 %%%---------------------------------------------------------------------------
+%%% @private
 %%% @doc
 %%%   Syslog log handler for {@link error_logger}.
 %%%
 %%%   == Usage ==
 %%%
-%%%   ```
-%%%   error_logger:add_report_handler(indira_log_syslog_h, [Ident, Facility]).
-%%%   gen_event:add_handler(error_logger, indira_log_syslog_h, [Ident, Facility]).
-%%%   '''
+%```
+%error_logger:add_report_handler(indira_log_syslog_h, [Ident, Facility]).
+%gen_event:add_handler(error_logger, indira_log_syslog_h, [Ident, Facility]).
+%'''
 %%%
 %%%   Arguments to the module (as in {@link gen_event:add_handler/3}):
 %%%   <ul>
@@ -23,7 +24,6 @@
 %%% @TODO Re-resolve remote syslog address on request.
 %%% @TODO Log JSON messages and raw lines.
 %%% @TODO Unify `supervisor_report' reports.
-%%%
 %%% @end
 %%%---------------------------------------------------------------------------
 

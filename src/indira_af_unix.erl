@@ -5,15 +5,20 @@
 %%%
 %%%   Active socket sends:
 %%%   <ul>
-%%%     <li>`{unix, Socket, Data :: binary()}'</li>
-%%%     <li>`{unix_closed, Socket}'</li>
-%%%     <li>`{unix_error, Socket, Reason}'</li>
+%%%     <li>{@type @{unix, socket(), Data :: binary()@}}</li>
+%%%     <li>{@type @{unix_closed, socket()@}}</li>
+%%%     <li>{@type @{unix_error, socket(), Reason :: term()@}}</li>
 %%%   </ul>
 %%%
-%%%   @TODO Rewrite recv(), because it's fugly.
-%%%   @TODO Add `{active, once}' option
-%%%   @TODO Add `list' option.
-%%%   @TODO Add `{packet, X}' option.
+%%%   <b>Warning</b>: port driver that is a backend for this module uses
+%%%   driver-level locking instead of port-level. Because of this, the module
+%%%   <em>is not suitable</em> for heavy data load. For administrative
+%%%   purposes it should be good enough, though.
+%%%
+%%% @TODO Rewrite recv(), because it's fugly.
+%%% @TODO Add `{active, once}' option
+%%% @TODO Add `list' option.
+%%% @TODO Add `{packet, X}' option.
 %%% @end
 %%%---------------------------------------------------------------------------
 
@@ -43,30 +48,24 @@
 
 %%%---------------------------------------------------------------------------
 
-%% @type socket() = port().
-
 -type socket() :: port().
-
-%% @type connection_socket() = socket().
+%% Socket handle.
 
 -type connection_socket() :: socket().
-
-%% @type server_socket() = socket().
+%% Client socket handle (either from connecting to socket or from accepting
+%% a connection on a server socket).
 
 -type server_socket() :: socket().
-
-%% @type option() = {active, true | false}.
+%% Server (listening) socket handle.
 
 -type option() :: {active, true | false}.
+%% Socket configuration option.
 
 %%%---------------------------------------------------------------------------
 %%% server socket API
 %%%---------------------------------------------------------------------------
 
 %% @doc Setup a socket listening on specified address.
-%%
-%% @spec listen(string()) ->
-%%   {ok, server_socket()} | {error, Reason}
 
 -spec listen(string()) ->
   {ok, server_socket()} | {error, term()}.
@@ -76,9 +75,6 @@ listen(Address) ->
 
 %% @doc Accept a client connection.
 %%   The function waits infinitely for a client.
-%%
-%% @spec accept(server_socket()) ->
-%%   {ok, connection_socket()} | {error, Reason}
 
 -spec accept(server_socket()) ->
   {ok, connection_socket()} | {error, term()}.
@@ -93,12 +89,12 @@ accept(Socket) ->
   end.
 
 %% @doc Accept a client connection.
-%%
-%% @spec accept(server_socket(), non_neg_integer()) ->
-%%   {ok, connection_socket()} | {error, timeout} | {error, Reason}
 
--spec accept(server_socket(), non_neg_integer()) ->
+-spec accept(server_socket(), timeout()) ->
   {ok, connection_socket()} | {error, timeout} | {error, term()}.
+
+accept(Socket, infinity = _Timeout) ->
+  accept(Socket);
 
 accept(Socket, Timeout) when Timeout =< 0 ->
   case try_accept(Socket) of
@@ -133,9 +129,9 @@ accept(Socket, Timeout) when Timeout > ?LOOP_INTERVAL ->
 %%
 %%   This function allows to send to datagram sockets as well, but
 %%   {@link recv/2} and {@link recv/3} won't work on such socket.
-%%
-%% @spec connect(string(), [option()]) ->
-%%   {ok, connection_socket()} | {error, Reason}
+
+-spec connect(string(), [option()]) ->
+  {ok, connection_socket()} | {error, term()}.
 
 connect(Address, Opts) ->
   case spawn_driver(connect, Address) of
@@ -149,9 +145,9 @@ connect(Address, Opts) ->
   end.
 
 %% @doc Send data to the socket.
-%%
-%% @spec send(connection_socket(), iolist() | binary()) ->
-%%   ok | {error, Reason}
+
+-spec send(connection_socket(), iolist()) ->
+  ok | {error, term()}.
 
 send(Socket, Data) ->
   try
@@ -163,9 +159,9 @@ send(Socket, Data) ->
   end.
 
 %% @doc Read `Length' bytes from socket.
-%%
-%% @spec recv(connection_socket(), non_neg_integer()) ->
-%%   {ok, Packet} | {error, Reason}
+
+-spec recv(connection_socket(), non_neg_integer()) ->
+  {ok, binary()} | {error, term()}.
 
 recv(Socket, Length) ->
   case erlang:port_call(Socket, ?PORT_COMMAND_RECV, Length) of
@@ -179,10 +175,9 @@ recv(Socket, Length) ->
   end.
 
 %% @doc Read `Length' bytes from socket (with timeout).
-%%
-%% @spec recv(connection_socket(), non_neg_integer(),
-%%            non_neg_integer() | infinity) ->
-%%   {ok, Packet} | {error, Reason}
+
+-spec recv(connection_socket(), non_neg_integer(), timeout()) ->
+  {ok, binary()} | {error, term()}.
 
 recv(Socket, Length, infinity = _Timeout) ->
   recv(Socket, Length);
@@ -217,9 +212,9 @@ recv(Socket, Length, Timeout) when Timeout > ?LOOP_INTERVAL ->
   end.
 
 %% @doc Set the socket owner.
-%%
-%% @spec controlling_process(socket(), pid()) ->
-%%   ok | {error, Reason}
+
+-spec controlling_process(socket(), pid()) ->
+  ok | {error, term()}.
 
 controlling_process(Socket, Pid) ->
   try
@@ -242,9 +237,6 @@ controlling_process(Socket, Pid) ->
   end.
 
 %% @doc Set socket options.
-%%
-%% @spec setopts(socket(), [option()]) ->
-%%   ok | {error, Reason}
 
 -spec setopts(socket(), [option()]) ->
   ok | {error, term()}.
@@ -272,9 +264,6 @@ setopts(_Socket, [_Any | _Rest] = _Options) ->
 %%%---------------------------------------------------------------------------
 
 %% @doc Close server connection.
-%%
-%% @spec close(socket()) ->
-%%   ok
 
 -spec close(socket()) ->
   ok.
@@ -295,9 +284,9 @@ close(Socket) when is_port(Socket) ->
 %%%---------------------------------------------------------------------------
 
 %% @doc Try accepting connection.
-%%
-%% @spec spawn_driver(listen | connect, string()) ->
-%%   {ok, socket()} | {error, Reason}
+
+-spec spawn_driver(listen | connect, string()) ->
+  {ok, socket()} | {error, term()}.
 
 spawn_driver(Type, Address) ->
   DriverCommand = case Type of
@@ -314,9 +303,9 @@ spawn_driver(Type, Address) ->
   end.
 
 %% @doc Try accepting connection.
-%%
-%% @spec try_accept(server_socket()) ->
-%%   {ok, connection_socket()} | nothing
+
+-spec try_accept(server_socket()) ->
+  {ok, connection_socket()} | nothing.
 
 try_accept(Socket) ->
   case erlang:port_call(Socket, ?PORT_COMMAND_ACCEPT, ignore) of
@@ -330,9 +319,9 @@ try_accept(Socket) ->
   end.
 
 %% @doc Ensure the port driver library is loaded.
-%%
-%% @spec ensure_driver_loaded() ->
-%%   ok
+
+-spec ensure_driver_loaded() ->
+  ok.
 
 ensure_driver_loaded() ->
   PrivDir = code:lib_dir(?APP_NAME, priv),

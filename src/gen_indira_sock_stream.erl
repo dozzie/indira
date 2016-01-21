@@ -311,13 +311,16 @@ start_link_supervised(Supervisor, ListenModule, ConnHandler, Address) ->
 %%% gen_server callbacks
 %%%---------------------------------------------------------------------------
 
-%%--------------------------------------------------------------------
+%%----------------------------------------------------------
 %% initialization and termination {{{
 
 %% @private
 %% @doc Initialize {@link gen_server} state.
 
 init({ListenModule, ConnHandlerModule, Address} = _Args) ->
+  put(indira_stream_listener, ListenModule),
+  put(indira_stream_conn_handler, ConnHandlerModule),
+  put(indira_stream_listen_address, Address),
   case ListenModule:listen(Address) of
     {ok, Socket} ->
       State = #state{
@@ -333,6 +336,9 @@ init({ListenModule, ConnHandlerModule, Address} = _Args) ->
   end;
 
 init({Supervisor, ListenModule, ConnHandlerModule, Address} = _Args) ->
+  put(indira_stream_listener, ListenModule),
+  put(indira_stream_conn_handler, ConnHandlerModule),
+  put(indira_stream_listen_address, Address),
   case ListenModule:listen(Address) of
     {ok, Socket} ->
       State = #state{
@@ -355,7 +361,7 @@ terminate(_Reason, _State = #state{socket = Socket, listen_module = Module}) ->
   Module:close(Socket).
 
 %% }}}
-%%--------------------------------------------------------------------
+%%----------------------------------------------------------
 %% communication {{{
 
 %% @private
@@ -401,7 +407,7 @@ handle_info(_Message, State) ->
   {noreply, State, 0}.
 
 %% }}}
-%%--------------------------------------------------------------------
+%%----------------------------------------------------------
 %% code change {{{
 
 %% @private
@@ -412,13 +418,13 @@ code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
 %% }}}
-%%--------------------------------------------------------------------
+%%----------------------------------------------------------
 
 %%%---------------------------------------------------------------------------
 %%% helpers
 %%%---------------------------------------------------------------------------
 
-%%--------------------------------------------------------------------
+%%----------------------------------------------------------
 %% spawn connection handler process {{{
 
 %% @doc Spawn connection handler process.
@@ -464,7 +470,7 @@ spawn_handler(Connection, _State = #state{supervisor = Supervisor}) ->
   end.
 
 %% }}}
-%%--------------------------------------------------------------------
+%%----------------------------------------------------------
 
 %%%---------------------------------------------------------------------------
 %%% vim:ft=erlang:foldmethod=marker

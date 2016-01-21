@@ -1,2 +1,2 @@
-indira_proto_lexer.erl
-indira_proto_parser.erl
+indira_json_lexer.erl
+indira_json_parser.erl

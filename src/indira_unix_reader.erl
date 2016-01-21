@@ -19,59 +19,67 @@
 
 %%%---------------------------------------------------------------------------
 
--record(state, {socket, command_router}).
+-record(state, {socket}).
 
 %%%---------------------------------------------------------------------------
 %%% public API for supervision tree
 %%%---------------------------------------------------------------------------
 
-%% @doc Start TCP reader process.
-start_link({CommandRouter, ClientSocket} = _Args) ->
-  gen_server:start_link(?MODULE, {CommandRouter, ClientSocket}, []).
+%% @private
+%% @doc Start unix reader process.
+
+start_link(ClientSocket) ->
+  gen_server:start_link(?MODULE, [ClientSocket], []).
 
 %%%---------------------------------------------------------------------------
 %%% gen_server callbacks
 %%%---------------------------------------------------------------------------
 
+%%----------------------------------------------------------
+%% initialization and termination {{{
+
+%% @private
 %% @doc Initialize {@link gen_server} state.
-init({CommandRouter, ClientSocket} = _Args) ->
-  State = #state{socket = ClientSocket, command_router = CommandRouter},
+
+init([ClientSocket] = _Args) ->
+  State = #state{socket = ClientSocket},
   {ok, State}.
 
+%% @private
 %% @doc Clean up {@link gen_server} state.
+
 terminate(_Reason, _State = #state{socket = Socket}) ->
   indira_af_unix:close(Socket),
   ok.
 
-%% @doc Handle code change.
-code_change(_OldVsn, State, _Extra) ->
-  {ok, State}.
+%% }}}
+%%----------------------------------------------------------
+%% communication {{{
 
+%% @private
 %% @doc Handle {@link gen_server:call/2}.
+
 handle_call(stop = _Request, _From, State) ->
   {stop, normal, ok, State};
 handle_call(_Request, _From, State) ->
   {noreply, State}. % ignore unknown calls
 
+%% @private
 %% @doc Handle {@link gen_server:cast/2}.
+
 handle_cast(_Request, State) ->
   {noreply, State}. % ignore unknown calls
 
-%% @doc Handle incoming messages (TCP data and commands).
+%% @private
+%% @doc Handle incoming messages (unix data and commands).
+
 handle_info({unix_closed, Socket} = _Msg, State = #state{socket = Socket}) ->
   {stop, normal, State};
 
 handle_info({unix, Socket, Line} = _Msg, State = #state{socket = Socket}) ->
   % log-and-terminate on parse error
-  case gen_indira_listener:command(State#state.command_router, Line) of
-    ok ->
-      {noreply, State};
-    {error, Reason} ->
-      Client = {unix, unknown_peer},
-      indira_log:error(bad_command_line, Reason,
-                       [{command_line, Line}, {client, Client}]),
-      {stop, bad_command_line, State}
-  end;
+  gen_indira_listener:command(Line),
+  {noreply, State};
 
 handle_info({result, Line} = _Msg, State = #state{socket = Socket}) ->
   indira_af_unix:send(Socket, [Line, "\n"]),
@@ -79,6 +87,19 @@ handle_info({result, Line} = _Msg, State = #state{socket = Socket}) ->
 
 handle_info(_Msg, State = #state{}) ->
   {noreply, State}.
+
+%% }}}
+%%----------------------------------------------------------
+%% code change {{{
+
+%% @private
+%% @doc Handle code change.
+
+code_change(_OldVsn, State, _Extra) ->
+  {ok, State}.
+
+%% }}}
+%%----------------------------------------------------------
 
 %%%---------------------------------------------------------------------------
 %%% vim:ft=erlang:foldmethod=marker

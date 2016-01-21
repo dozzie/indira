@@ -11,7 +11,6 @@
 %%%     <li>`inet:ip_address()' (i.e. `{N1,N2,N3,N4}' for IPv4)</li>
 %%%     <li>`` 'any' '' to indicate no binding to any particular interface</li>
 %%%   </ul>
-%%%
 %%% @end
 %%%---------------------------------------------------------------------------
 
@@ -23,7 +22,7 @@
 %%%---------------------------------------------------------------------------
 
 %% Indira listener API
--export([child_spec/2]).
+-export([child_spec/1]).
 
 %% gen_server callbacks
 -export([init/1, terminate/2]).
@@ -31,13 +30,13 @@
 -export([code_change/3]).
 
 %% API for supervision tree
--export([start_link/3]).
+-export([start_link/2]).
 
 %%%---------------------------------------------------------------------------
 
 -include_lib("kernel/include/inet.hrl").
 
--record(state, {socket, command_router}).
+-record(state, {socket}).
 
 %%%---------------------------------------------------------------------------
 %%% Indira listener API
@@ -45,9 +44,10 @@
 
 %% @private
 %% @doc Listener description.
-child_spec(CmdRouter, {Host, Port} = _Args) ->
+
+child_spec({Host, Port} = _Args) ->
   {ignore,
-    {?MODULE, start_link, [CmdRouter, Host, Port]},
+    {?MODULE, start_link, [Host, Port]},
     permanent, 5000, worker, [?MODULE]}.
 
 %%%---------------------------------------------------------------------------
@@ -56,41 +56,45 @@ child_spec(CmdRouter, {Host, Port} = _Args) ->
 
 %% @private
 %% @doc Start UDP listener process.
-start_link(CmdRouter, Host, Port) ->
-  Args = {CmdRouter, Host, Port},
-  gen_server:start_link(?MODULE, Args, []).
+
+start_link(Host, Port) ->
+  gen_server:start_link(?MODULE, [Host, Port], []).
 
 %%%---------------------------------------------------------------------------
 %%% connection acceptor
 %%%---------------------------------------------------------------------------
 
+%%----------------------------------------------------------
+%% initialization and termination {{{
+
 %% @private
 %% @doc Initialize {@link gen_server} state.
 %%   This includes creating listening UDP socket.
-init({CmdRouter, Host, Port} = _Args) ->
+
+init([Host, Port] = _Args) ->
   % create listening socket
   BindOpt = address_to_bind_option(Host),
   {ok, Socket} = gen_udp:open(Port, BindOpt ++ [
     {active, true}, {reuseaddr, true}, list
   ]),
-
-  State = #state{socket = Socket, command_router = CmdRouter},
+  State = #state{socket = Socket},
   {ok, State}.
 
 %% @private
 %% @doc Clean up {@link gen_server} state.
 %%   This includes closing the listening socket.
+
 terminate(_Reason, _State = #state{socket = Socket}) ->
   gen_udp:close(Socket),
   ok.
 
-%% @private
-%% @doc Handle code change.
-code_change(_OldVsn, State, _Extra) ->
-  {ok, State}.
+%% }}}
+%%----------------------------------------------------------
+%% communication {{{
 
 %% @private
 %% @doc Handle {@link gen_server:call/2}.
+
 handle_call(stop = _Request, _From, State) ->
   {stop, normal, ok, State};
 handle_call(_Request, _From, State) ->
@@ -98,25 +102,17 @@ handle_call(_Request, _From, State) ->
 
 %% @private
 %% @doc Handle {@link gen_server:cast/2}.
+
 handle_cast(_Request, State) ->
   {noreply, State}. % ignore unknown casts
 
 %% @private
 %% @doc Handle incoming messages (UDP data and commands).
+
 handle_info({udp, Socket, IP, Port, Line} = _Msg,
             State = #state{socket = Socket}) ->
-  #state{command_router = CmdRouter} = State,
   RoutingHint = {IP, Port},
-  case gen_indira_listener:command(CmdRouter, RoutingHint, Line) of
-    ok ->
-      ok;
-    {error, Reason} ->
-      {ok, Sockname} = inet:sockname(Socket),
-      Client = {udp, Sockname, RoutingHint},
-      indira_log:error(bad_command_line, Reason,
-                       [{command_line, Line}, {client, Client}]),
-      proceed
-  end,
+  gen_indira_listener:command(RoutingHint, Line),
   {noreply, State};
 
 handle_info({result, {IP, Port} = _RoutingHint, Line} = _Msg,
@@ -127,17 +123,33 @@ handle_info({result, {IP, Port} = _RoutingHint, Line} = _Msg,
 handle_info(_Msg, State = #state{}) ->
   {noreply, State}. % ignore other messages
 
+%% }}}
+%%----------------------------------------------------------
+%% code change {{{
+
+%% @private
+%% @doc Handle code change.
+
+code_change(_OldVsn, State, _Extra) ->
+  {ok, State}.
+
+%% }}}
+%%----------------------------------------------------------
 
 %%%---------------------------------------------------------------------------
 %%% network helpers
 %%%---------------------------------------------------------------------------
 
 %% @doc Resolve DNS address to IP.
+
+-spec address_to_bind_option(any | inet:hostname() | inet:ip_address()) ->
+  [{atom(), term()}].
+
 address_to_bind_option(any) ->
   [];
-address_to_bind_option(Addr) when is_list(Addr) ->
-  {ok, #hostent{h_addr_list = HostAddrs}} = inet:gethostbyname(Addr),
-  [HostAddr | _Rest] = HostAddrs,
+address_to_bind_option(Addr) when is_list(Addr); is_atom(Addr) ->
+  % TODO: IPv6 (inet6)
+  {ok, HostAddr} = inet:getaddr(Addr, inet),
   [{ip, HostAddr}];
 address_to_bind_option(Addr) when is_tuple(Addr) ->
   [{ip, Addr}].

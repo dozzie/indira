@@ -26,17 +26,11 @@ in any language, since it only talks through sockets to daemon instance).
 
 Inside Erlang code, there must be an application to run the service, of
 course. Beside the application, there's one Indira process called command
-router (module indira_router). It's started as part of `indira' application
-(so there will be two apps: `indira' and the service application) along with
-several listeners. Router passes commands coming from listeners to command
-executor, which is the last part.
-
-Command executor is a process that receives messages formed according to
-Indira protocol and sends responses back. There is no need to use Indira's API
-in the executor at all, so the application doesn't need to (and shouldn't)
-pull Indira as its dependency. But there's more: command executor doesn't
-even need to be a part of the service application, as long as it can talk to
-the application.
+executor (module indira_commander). It's started as part of `indira'
+application (so there will be two apps: `indira' and the service application)
+along with several listeners. Command executor calls a command handler module
+to interpret the commands and sends the returned values to appropriate
+sockets.
 
 Daemon accepts configuration from few different sources. It may load its
 settings from INI/YAML/JSON files or it may read command line parameters.

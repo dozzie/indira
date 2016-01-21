@@ -1,30 +1,29 @@
 %%%---------------------------------------------------------------------------
 %%% @private
 %%% @doc
-%%%   Indira application entry point.
+%%%   Command handler that calls specified function.
 %%% @end
 %%%---------------------------------------------------------------------------
 
--module(indira_app).
+-module(indira_command_handle_fun).
 
--behaviour(application).
+-behaviour(gen_indira_command).
 
-%% application callbacks
--export([start/2, stop/1]).
+%% Indira command handler API
+-export([handle_command/2]).
 
 %%%---------------------------------------------------------------------------
-%%% application callbacks
+%%% Indira command handler API
 %%%---------------------------------------------------------------------------
 
-%% @doc Start application.
+%% @private
+%% @doc Handle commands.
 
-start(_StartType, _StartArgs) ->
-  indira_sup:start_link().
+handle_command(Command, {Function}) ->
+  Function(Command);
 
-%% @doc Stop application.
-
-stop(_State) ->
-  ok.
+handle_command(Command, {Function, Arg}) ->
+  Function(Command, Arg).
 
 %%%---------------------------------------------------------------------------
 %%% vim:ft=erlang:foldmethod=marker

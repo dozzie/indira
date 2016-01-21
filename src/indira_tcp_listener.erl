@@ -18,28 +18,24 @@
 
 -define(ACCEPT_TIMEOUT, 300). % somewhat arbitrary
 
--record(state, {router, socket}).
+-record(state, {socket}).
 
 %%%---------------------------------------------------------------------------
 
-%% @type connection() = {CommandRouter :: pid(), gen_tcp:socket()}.
-
--type connection() :: {pid(), gen_tcp:socket()}.
+-type connection() :: gen_tcp:socket().
 
 %%%---------------------------------------------------------------------------
 %%% gen_indira_sock_stream callbacks
 %%%---------------------------------------------------------------------------
 
+%% @private
 %% @doc Prepare listening socket.
-%%
-%% @spec listen({CommandRouter :: pid(),
-%%                {BindAddr :: string() | any, Port :: integer()}}) ->
-%%   {ok, State :: #state{}} | {error, Reason}
 
--spec listen({pid(), {string() | any, integer()}}) ->
+-spec listen({inet:hostname() | inet:ip_address() | any,
+              inet:port_number()}) ->
   {ok, #state{}} | {error, term()}.
 
-listen({CommandRouter, {Host, Port}} = _Args) ->
+listen({Host, Port} = _Args) ->
   ListenOpts = address_to_bind_option(Host) ++ [
     {active, false},
     {reuseaddr, true},
@@ -48,43 +44,37 @@ listen({CommandRouter, {Host, Port}} = _Args) ->
   ],
   case gen_tcp:listen(Port, ListenOpts) of
     {ok, Socket} ->
-      {ok, #state{router = CommandRouter, socket = Socket}};
+      {ok, #state{socket = Socket}};
     {error, Reason} ->
       {error, Reason}
   end.
 
+%% @private
 %% @doc Accept new connection.
-%%
-%% @spec accept(#state{}) ->
-%%     {ok, connection(), #state{}}
-%%   | {ok, #state{}}
-%%   | {stop, Reason, #state{}}
 
 -spec accept(#state{}) ->
     {ok, connection(), #state{}}
   | {ok, #state{}}
-  | {stop, term(), #state{}}.
+  | {stop, Reason :: term(), #state{}}.
 
-accept(State = #state{router = CommandRouter, socket = Socket}) ->
+accept(State = #state{socket = Socket}) ->
   % remember not to block forever here
   case gen_tcp:accept(Socket, ?ACCEPT_TIMEOUT) of
     {ok, Connection} ->
-      {ok, {CommandRouter, Connection}, State};
+      {ok, Connection, State};
     {error, timeout} ->
       {ok, State};
     {error, Reason} ->
       {stop, Reason, State}
   end.
 
+%% @private
 %% @doc Set controlling process of newly accepted connection.
-%%
-%% @spec controlling_process(connection(), pid()) ->
-%%   ok
 
 -spec controlling_process(connection(), pid()) ->
-  ok.
+  ok | {error, term()}.
 
-controlling_process({_CommandRouter, Connection} = _ChildState, Pid) ->
+controlling_process(Connection = _ChildState, Pid) ->
   case gen_tcp:controlling_process(Connection, Pid) of
     ok ->
       inet:setopts(Connection, [{active, true}]);
@@ -92,7 +82,11 @@ controlling_process({_CommandRouter, Connection} = _ChildState, Pid) ->
       {error, Reason}
   end.
 
+%% @private
 %% @doc Close listening socket.
+
+-spec close(#state{}) ->
+  ok.
 
 close(_State = #state{socket = Socket}) ->
   gen_tcp:close(Socket).
@@ -103,9 +97,12 @@ close(_State = #state{socket = Socket}) ->
 
 %% @doc Resolve DNS address to IP.
 
+-spec address_to_bind_option(any | inet:hostname() | inet:ip_address()) ->
+  [{atom(), term()}].
+
 address_to_bind_option(any) ->
   [];
-address_to_bind_option(Addr) when is_list(Addr) ->
+address_to_bind_option(Addr) when is_list(Addr); is_atom(Addr) ->
   % TODO: IPv6 (inet6)
   {ok, HostAddr} = inet:getaddr(Addr, inet),
   [{ip, HostAddr}];

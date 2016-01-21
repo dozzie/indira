@@ -14,59 +14,50 @@
 -export([send/2]).
 -export([close/1]).
 
+-export_type([facility/0, priority/0, ident/0, connection/0]).
+
 %%%---------------------------------------------------------------------------
 
 %%%---------------------------------------------------------------------------
 %%% data types {{{
 
-%% @type facility() =
-%%     kern | user | daemon | cron | syslog | auth | authpriv
-%%   | mail | ftp | lpr | news | uucp
-%%   | local0 | local1 | local2 | local3 | local4 | local5 | local6 | local7.
-%%   Meaning of facilities:
-%%   <ul>
-%%     <li><i>kern</i> -- kernel messages</li>
-%%     <li><i>user</i> -- random user-level messages</li>
-%%     <li><i>daemon</i> -- system daemons</li>
-%%     <li><i>cron</i> -- clock daemon</li>
-%%     <li><i>syslog</i> -- messages generated internally by syslogd</li>
-%%     <li><i>auth</i> -- security/authorization messages</li>
-%%     <li><i>authpriv</i> -- security/authorization messages (private)</li>
-%%     <li><i>mail</i> -- mail system</li>
-%%     <li><i>ftp</i> -- FTP daemon</li>
-%%     <li><i>lpr</i> -- line printer subsystem</li>
-%%     <li><i>news</i> -- network news subsystem</li>
-%%     <li><i>uucp</i> -- UUCP subsystem</li>
-%%     <li><i>local0</i>..<i>local7</i> -- reserved for local use</li>
-%%   </ul>
 -type facility() ::
     kern | user | daemon | cron | syslog | auth | authpriv
   | mail | ftp | lpr | news | uucp
   | local0 | local1 | local2 | local3 | local4 | local5 | local6 | local7.
-
-%% @type priority() =
-%%   emerg | alert | crit | err | warning | notice | info | debug.
-%%   Meaning of priorities:
-%%   <ul>
-%%     <li><i>emerg</i> -- system is unusable</li>
-%%     <li><i>alert</i> -- action must be taken immediately</li>
-%%     <li><i>crit</i> -- critical conditions</li>
-%%     <li><i>err</i> -- error conditions</li>
-%%     <li><i>warning</i> -- warning conditions</li>
-%%     <li><i>notice</i> -- normal but significant condition</li>
-%%     <li><i>info</i> -- informational</li>
-%%     <li><i>debug</i> -- debug-level messages</li>
-%%   </ul>
+%% Meaning of the facilities:
+%% <ul>
+%%   <li><i>kern</i> -- kernel messages</li>
+%%   <li><i>user</i> -- random user-level messages</li>
+%%   <li><i>daemon</i> -- system daemons</li>
+%%   <li><i>cron</i> -- clock daemon</li>
+%%   <li><i>syslog</i> -- messages generated internally by syslogd</li>
+%%   <li><i>auth</i> -- security/authorization messages</li>
+%%   <li><i>authpriv</i> -- security/authorization messages (private)</li>
+%%   <li><i>mail</i> -- mail system</li>
+%%   <li><i>ftp</i> -- FTP daemon</li>
+%%   <li><i>lpr</i> -- line printer subsystem</li>
+%%   <li><i>news</i> -- network news subsystem</li>
+%%   <li><i>uucp</i> -- UUCP subsystem</li>
+%%   <li><i>local0</i>..<i>local7</i> -- reserved for local use</li>
+%% </ul>
 
 -type priority() ::
   emerg | alert | crit | err | warning | notice | info | debug.
-
-%% @type ident() = string() | atom().
-%%   Identification of current process (daemon name).
+%% Meaning of the priorities:
+%% <ul>
+%%   <li><i>emerg</i> -- system is unusable</li>
+%%   <li><i>alert</i> -- action must be taken immediately</li>
+%%   <li><i>crit</i> -- critical conditions</li>
+%%   <li><i>err</i> -- error conditions</li>
+%%   <li><i>warning</i> -- warning conditions</li>
+%%   <li><i>notice</i> -- normal but significant condition</li>
+%%   <li><i>info</i> -- informational</li>
+%%   <li><i>debug</i> -- debug-level messages</li>
+%% </ul>
 
 -type ident() :: string() | atom().
-
-%% @type connection() = term().
+%% Identification of current process (daemon name).
 
 -type connection() :: term().
 
@@ -86,9 +77,6 @@
 %%
 %%   Returned data doesn't contain trailing newline. Note that it also doesn't
 %%   contain hostname, as this is added by syslog daemon.
-%%
-%% @spec format(facility(), priority(), ident(), iolist()) ->
-%%   iolist()
 
 -spec format(facility(), priority(), ident(), iolist()) ->
   iolist().
@@ -104,24 +92,26 @@ format(Facility, Priority, Ident, Message) ->
 %% time formatting {{{
 
 %% @doc Syslog-formatted current time.
-%%
-%% @spec syslog_time() ->
-%%   iolist()
+
+-spec syslog_time() ->
+  iolist().
 
 syslog_time() ->
   syslog_time(os:timestamp()).
 
 %% @doc Syslog-formatted time.
-%%
-%% @spec syslog_time({MegaSecs :: integer(), Secs :: integer(),
-%%                     MicroSecs :: integer()}) ->
-%%   iolist()
+
+-spec syslog_time(erlang:timestamp()) ->
+  iolist().
 
 syslog_time(Timestamp) ->
   {{_Year,Month,Day},{H,M,S}} = calendar:now_to_local_time(Timestamp),
   io_lib:format("~s ~2B ~2..0B:~2..0B:~2..0B", [month(Month), Day, H, M, S]).
 
 %% @doc Convert month number to abbreviated English name.
+
+-spec month(MonthNumber :: 1..12) ->
+  string().
 
 month(1)  -> "Jan";
 month(2)  -> "Feb";
@@ -141,11 +131,8 @@ month(12) -> "Dec".
 %% facility and priority {{{
 
 %% @doc Decode syslog-encoded facility and priority to atoms.
-%%
-%% @spec decode(integer()) ->
-%%   {facility(), priority()}
 
--spec decode(integer()) ->
+-spec decode(non_neg_integer()) ->
   {facility(), priority()}.
 
 decode(Combined) when is_integer(Combined) ->
@@ -154,9 +141,6 @@ decode(Combined) when is_integer(Combined) ->
   {facility(Facility), priority(Priority)}.
 
 %% @doc Encode facility and priority
-%%
-%% @spec encode(facility(), priority()) ->
-%%   integer()
 
 -spec encode(facility(), priority()) ->
   integer().
@@ -249,12 +233,9 @@ facility(local7)   -> 23. % reserved for local use
 %% opening connection {{{
 
 %% @doc Open connection to local syslog.
-%%
-%% @spec open_local(string()) ->
-%%   {ok, connection()} | {error, Reason}
 
 -spec open_local(string()) ->
-  {ok, connection()} | {error, term}.
+  {ok, connection()} | {error, term()}.
 
 open_local(SocketPath) ->
   case indira_af_unix:connect(SocketPath, [{active, false}]) of
@@ -263,13 +244,9 @@ open_local(SocketPath) ->
   end.
 
 %% @doc Open connection to remote syslog (UDP).
-%%
-%% @spec open_remote(inet:hostname() | inet:ip_address(),
-%%                   integer() | default) ->
-%%   {ok, connection()} | {error, Reason}
 
 -spec open_remote(inet:hostname() | inet:ip_address(),
-                  integer() | default) ->
+                  inet:port_number() | default) ->
   {ok, connection()} | {error, term()}.
 
 open_remote(Host, default = _Port) ->
@@ -292,9 +269,6 @@ open_remote(Host, Port) when is_tuple(Host) ->
 %% sending a message {{{
 
 %% @doc Send a line to syslog.
-%%
-%% @spec send(connection(), iolist()) ->
-%%   ok | {error, Reason}
 
 -spec send(connection(), iolist()) ->
   ok | {error, term()}.
@@ -310,9 +284,6 @@ send({udp, Socket, {Host, Port}} = _Syslog, Message) ->
 %% closing connection {{{
 
 %% @doc Close a connection to syslog.
-%%
-%% @spec close(connection()) ->
-%%   ok
 
 -spec close(connection()) ->
   ok.

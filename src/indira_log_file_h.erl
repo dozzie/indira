@@ -1,13 +1,14 @@
 %%%---------------------------------------------------------------------------
+%%% @private
 %%% @doc
 %%%   Flat file log handler for {@link error_logger}.
 %%%
 %%%   == Usage ==
 %%%
-%%%   ```
-%%%   error_logger:add_report_handler(indira_log_file_h, [Ident, File]).
-%%%   gen_event:add_handler(error_logger, indira_log_file_h, [Ident, File]).
-%%%   '''
+%```
+%error_logger:add_report_handler(indira_log_file_h, [Ident, File]).
+%gen_event:add_handler(error_logger, indira_log_file_h, [Ident, File]).
+%'''
 %%%
 %%%   Arguments to the module (as in {@link gen_event:add_handler/3}):
 %%%   <ul>
@@ -15,10 +16,9 @@
 %%%         path (string)</li>
 %%%   </ul>
 %%%
-%%% <b>NOTE</b>: This module is a clone of {@link indira_log_syslog_h}. Any
-%%% changes to code in <i>communication</i> section should be made first
-%%% there.
-%%%
+%%%   <b>NOTE</b>: This module is a clone of {@link indira_log_syslog_h}. Any
+%%%   changes to code in <i>communication</i> section should be made first
+%%%   there.
 %%% @end
 %%%---------------------------------------------------------------------------
 
@@ -262,7 +262,7 @@ fmtident(Ident) when is_atom(Ident) -> atom_to_list(Ident).
 
 fmtprio(err = _Prio)   -> "error";
 fmtprio(crit = _Prio)  -> "critical";
-fmtprio(emerg = _Prio) -> "emergency";
+%fmtprio(emerg = _Prio) -> "emergency";
 fmtprio(Prio)          -> atom_to_list(Prio).
 
 %%----------------------------------------------------------

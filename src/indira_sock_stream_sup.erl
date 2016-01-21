@@ -4,7 +4,6 @@
 %%%   {@link gen_indira_sock_stream} top-level supervisor.
 %%%
 %%% @TODO Read part of the restart strategy from listen module, if applicable.
-%%%
 %%% @end
 %%%---------------------------------------------------------------------------
 
@@ -27,14 +26,15 @@
 %%----------------------------------------------------------
 %% starting supervisor process
 
+%% @private
 %% @doc Start the supervisor process.
 %%
 %%   `ConnHandler' is expected to have function name explicit.
-%%
-%% @spec start_link(gen_indira_sock_stream:listener_module(),
-%%                  gen_indira_sock_stream:connection_handler(),
-%%                  gen_indira_sock_stream:listen_address()) ->
-%%   {ok, Pid} | {error, Reason}
+
+-spec start_link(gen_indira_sock_stream:listener_module(),
+                 gen_indira_sock_stream:connection_handler(),
+                 gen_indira_sock_stream:listen_address()) ->
+  {ok, pid()} | {error, term()}.
 
 start_link(ListenModule, ConnHandler, Address) ->
   supervisor:start_link(?MODULE, {ListenModule, ConnHandler, Address}).
@@ -45,9 +45,9 @@ start_link(ListenModule, ConnHandler, Address) ->
 %% @doc Start connection handlers' supervisor.
 %%
 %% @see indira_sock_stream_connection_sup
-%%
-%% @spec start_connection_supervisor(pid()) ->
-%%   {ok, Pid} | {error, Reason}
+
+-spec start_connection_supervisor(pid()) ->
+  {ok, pid()} | {error, term()}.
 
 start_connection_supervisor(Supervisor) ->
   % FIXME: this is subject to a race condition with parent
@@ -61,10 +61,14 @@ start_connection_supervisor(Supervisor) ->
 %%% supervisor callbacks
 %%%---------------------------------------------------------------------------
 
+%% @private
 %% @doc Initialize supervisor.
 
 init({ListenModule, ConnHandler, Address} = _Args) ->
   ListenerArgs = [self(), ListenModule, ConnHandler, Address],
+  put(indira_stream_listener, ListenModule),
+  put(indira_stream_conn_handler, ConnHandler),
+  put(indira_stream_listen_address, Address),
 
   Strategy = {one_for_all, 5, 10},
   Children = [

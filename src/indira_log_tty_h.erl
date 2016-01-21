@@ -1,4 +1,5 @@
 %%%---------------------------------------------------------------------------
+%%% @private
 %%% @doc
 %%%   {@link error_logger} log handler (print to <i>STDOUT</i>).
 %%% @end

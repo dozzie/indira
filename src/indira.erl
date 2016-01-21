@@ -4,18 +4,22 @@
 %%%
 %%%   This module contains functions to be called from `escript' script and
 %%%   utility functions for {@link gen_indira_listener. listeners}. It also
-%%%   documents how to configure Indira ({@section Indira configuration}) and
-%%%   the protocol to communicate with {@section Command executor}.
+%%%   documents how to configure Indira ({@section Indira configuration}).
+%%%   Protocol used to issue commands is described in {@link
+%%%   gen_indira_listener} module.
+%%%
+%%%   Indira is intended to be started as the first application in `escript'.
 %%%
 %%%   == Indira configuration ==
 %%%
-%%%   Indira uses two configuration keys ({@link application:get_env/2}):
-%%%   <i>listen</i> and <i>commander</i>.
+%%%   Indira uses several configuration keys ({@link application:get_env/2}),
+%%%   of which two are most important:
+%%%   <i>listen</i> and <i>command</i>.
 %%%
-%%%   The value of <i>commander</i> is a name (atom) under which your
-%%%   {@section Command executor} will be registered. If you configure Indira
-%%%   with {@link application:set_env/3}, you can provide raw PID, but it's
-%%%   generally not a good idea (think of dying processes).
+%%%   The value of <i>command</i> is a module name (with an arbitrary
+%%%   parameter) that implements {@link gen_indira_command} behaviour. It can
+%%%   also be a function, but this way is not recommended. See {@link
+%%%   gen_indira_command} for details.
 %%%
 %%%   The value of <i>listen</i> is a list of pairs `{Mod,Args}'. `Mod' is
 %%%   a name (atom) of module which is considered to be listener's entry
@@ -24,172 +28,29 @@
 %%%   For more details see {@link gen_indira_listener}.
 %%%
 %%%   A file passed to <i>-config</i> VM option could look like this:
-%%%   ```
-%%%   [
-%%%     {indira, [
-%%%       {listen, [
-%%%         {indira_tcp, {"localhost", 16667}},
-%%%         {indira_unix, "/var/run/my_app.sock"}
-%%%       ]},
-%%%       {commander, my_app_command}
-%%%     ]},
-%%%     % ...
-%%%   ].
-%%%   '''
+%```
+%[
+%  {indira, [
+%    {listen, [
+%      {indira_tcp, {"localhost", 16667}},
+%      {indira_unix, "/var/run/my_app.sock"}
+%    ]},
+%    {command, {my_app_command, []}}
+%  ]},
+%  % ...
+%].
+%'''
 %%%
-%%%   == Command executor ==
-%%%
-%%%   Command executor is a process that receives messages of following
-%%%   structure: `{command,ReplyTo,ChannelID,Command}'. It should reply with
-%%%   tuple `{result,ChannelID,Reply}' to `ReplyTo' process.
-%%%
-%%%   Data in `Reply' should be jsx-like structured. Short reference is here:
-%%%   {@section Data structure (jsx)}.
-%%%
-%%%   Data in `Command' has either jsx-like structure if the command was
-%%%   encoded as JSON ({@section JSON command}) or is a tuple if the command
-%%%   was a {@section simple command}.
-%%%
-%%%   Command executor is responsible for logging commands it has received.
-%%%   It's highly recommended to log the commands being executed in the
-%%%   application.
-%%%
-%%%   Some proposals for commands:
-%%%   <ul>
-%%%     <li><i>stop</i>, shutdown the daemon (initscript)</li>
-%%%     <li><i>is daemon running?</i>, wait for daemon to start
-%%%         (initscript)</li>
-%%%     <li><i>reload</i>, reload configuration stored in a file</li>
-%%%     <li><i>netconfig</i>, setup distributed Erlang (epmd, cookie and
-%%%         <i>-(s)name</i>)</li>
-%%%   </ul>
-%%%
-%%%   === Example executor ===
-%%%
-%%%   This is the simplest (and the dumbest) command executor:
-%%%   ```
-%%%   start_command_executor() ->
-%%%     spawn(fun() ->
-%%%       register(my_app_command, self()),
-%%%       command_executor()
-%%%     end).
-%%%
-%%%   command_executor() ->
-%%%     receive
-%%%       {command, ReplyTo, ChannelID, Command} ->
-%%%         error_logger:info_report(my_app_command, [
-%%%           {message, "got a command"},
-%%%           {command, Command}, {channel, ChannelID}
-%%%         ]),
-%%%         ReplyTo ! {result, ChannelID, ok},
-%%%         command_executor();
-%%%       _Any ->
-%%%         % ignore
-%%%         command_executor()
-%%%     end.
-%%%   '''
-%%%
-%%%   For real world applications, the executor will probably implement
-%%%   {@link gen_server} behaviour and be started as a part of application's
-%%%   supervision tree.
-%%%
-%%%   Note: when handling commands, remember to add support for unrecognized
-%%%   commands. You don't want your command executor crashed when talking to
-%%%   buggy client.
-%%%
-%%%   == Communication protocol ==
-%%%
-%%%   The protocol to communicate with the world outside of Erlang VM is
-%%%   line-based. There can be various ways of delivering the line (e.g. HTTP
-%%%   POST); they won't be covered here. Instead, this section focuses on the
-%%%   format of the line itself.
-%%%
-%%%   Request line is either a simple command or JSON document.
-%%%
-%%%   When command executor sent something that couldn't be serialized, the
-%%%   response line will be "`bad result'". Otherwise, the response will
-%%%   always be single-line JSON document.
-%%%
-%%%   === simple command ===
-%%%
-%%%   A simple command line is composed of a word denoting the command and
-%%%   list of options (possibly empty) separated with spaces. Option is a word
-%%%   or assignment. Assignment is composed of word, "`='" sign and a word,
-%%%   JSON string or JSON number. Word is a sequence of letters, digits,
-%%%   underscore, hyphen and period, beginning with a letter or underscore.
-%%%
-%%%   Some examples:
-%%%   ```
-%%%   command_word
-%%%   also.a.word this_is_an_option
-%%%   some_cmd option=value option2="spaces and\nnewlines allowed in strings"
-%%%   '''
-%%%
-%%%   Simple command is sent to command executor as a tuple of
-%%%   `{<<"command">>, Options}', where `Options' is a list (possibly empty)
-%%%   of binaries (word option) or pairs `{Name,Value}' (assignment; `Name'
-%%%   will be a binary, `Value' will be a binary, integer or float, depending
-%%%   on the assigned value).
-%%%
-%%%   Commands from example above will be passed to command executor as:
-%%%   ```
-%%%   {<<"command_word">>, []}.
-%%%   {<<"also.a.word">>, [<<"this_is_an_option">>]}.
-%%%   {<<"some_cmd">>, [
-%%%     {<<"option">>, <<"value">>},
-%%%     {<<"option2">>, <<"spaces and\nnewlines allowed in strings">>}
-%%%   ]}.
-%%%   '''
-%%%
-%%%   === JSON command ===
-%%%
-%%%   JSON command consists of a valid single-line JSON document.
-%%%
-%%%   Erlang representation is based on jsx.
-%%%   <ul>
-%%%     <li><i>object</i> is encoded as `[{}]' (empty object) or a list of
-%%%         `{Key,Value}' pairs, where `Key' is always a binary and `Value' is
-%%%         JSON value</li>
-%%%     <li><i>array</i> is encoded as a list</li>
-%%%     <li><i>string</i> is encoded as a binary (UTF-8 encoding)</li>
-%%%     <li><i>number</i> is encoded as integer (if possible) or float</li>
-%%%     <li>`true', `false' and `null' are encoded as corresponding atoms</li>
-%%%   </ul>
-%%%
-%%%   === Data structure (jsx) ===
-%%%
-%%%   Serializable data is:
-%%%   <ul>
-%%%     <li>`[{}]', encoded as empty JSON object</li>
-%%%     <li>`[{K,V}, ...]', encoded as JSON object; `V' can be any
-%%%         serializable data, `K' is an atom, string (list) or a binary</li>
-%%%     <li>`[]', `[V,...]', encoded as a JSON array; `V' can be any
-%%%         serializable data</li>
-%%%     <li>integer is encoded as a number (no periods or "e" letters)</li>
-%%%     <li>float is encoded as a number (containing period, "e", or
-%%%         both)</li>
-%%%     <li>atoms `null', `true' and `false' are encoded as corresponding JSON
-%%%         values</li>
-%%%     <li>atom other than above-mentioned three is encoded as a string</li>
-%%%     <li>binary is encoded as a string</li>
-%%%   </ul>
-%%%   Note that Erlang strings are generally recognized as arrays of integers,
-%%%   except for being a key in proplist.
-%%%
-%%%   Note also that tuples alone are not allowed. They can only compose
-%%%   proplists that will be serialized to JSON object.
-%%%
-%%% @TODO API for client command line utilities.
 %%% @TODO Notice if no listeners defined (see {@link
 %%%   indira_listener_sup:init/1}).
 %%% @TODO Channel types defined by operator (to differentiate between unix
 %%%   socket, SSL and TCP).
-%%% @TODO Pre-format standard OTP logs.
 %%% @TODO Add some channel-defined context to commands (e.g. for operation
 %%%   logging).
 %%% @TODO Don't crash BEAM when Indira failed to start. Rather, provide means
 %%%   to detect it in startup script.
 %%%
+%%% @see gen_indira_command
 %%% @see indira_tcp
 %%% @see indira_udp
 %%% @see indira_unix
@@ -203,16 +64,16 @@
 -export([start/0]).
 
 %% API for escript
--export([set_commander/1, add_listener/2]).
--export([set_environment/1, set_option/3, load_app_config/1]).
+-export([set_option/3]).
 -export([sleep_forever/0]).
 -export([start_rec/1, start_rec/2]).
 -export([write_pidfile/1]).
 -export([chdir/0, chdir/1]).
 -export([setup_logging/2]).
--export([distributed/1]).
--export([distributed/2]).
--export([distributed/3]).
+-export([distributed/1, distributed/2, distributed/3]).
+-export([distributed_start/0, distributed_stop/0]).
+
+-export_type([event_filter_fun/0, log_destination/0]).
 
 %%%---------------------------------------------------------------------------
 %%% types
@@ -221,19 +82,30 @@
 %%----------------------------------------------------------
 %% log_destination() {{{
 
+-type log_destination() ::
+    stdout | stderr
+  | {stdout, color|colour} | {stderr, color|colour}
+  | {file, file:filename()} % what about log rotation?
+  | syslog
+  | {syslog, inet:hostname() | inet:ip_address()}
+  | {syslog, {inet:hostname() | inet:ip_address(), inet:port_number()}}
+  | lager
+  | {lager, Config :: term()}
+  | {gen_event, module(), Args :: term()}.
+
 %% @type log_destination() =
 %%     stdout | stderr
 %%   | {stdout, color|colour} | {stderr, color|colour}
-%%   | {file, Filename :: string()}
+%%   | {file, file:filename()}
 %%   | syslog
-%%   | {syslog, DestHost :: inet:hostname() | inet:ip_address()}
-%%   | {syslog, {Host :: inet:hostname() | inet:ip_address(),
-%%                Port :: integer()}}
+%%   | {syslog, inet:hostname() | inet:ip_address()}
+%%   | {syslog, {inet:hostname() | inet:ip_address(), inet:port_number()}}
 %%   | lager
 %%   | {lager, Config :: term()}
-%%   | {gen_event, Module :: term(), Args :: term()}.
+%%   | {gen_event, module(), Args :: term()}.
 %%
 %% Log destination description.
+%%
 %% <ul>
 %%   <li>`stdout' and `stderr' prints events on screen (`{StdX,colour}'
 %%       additionally colours warnings and errors)</li>
@@ -249,72 +121,16 @@
 %%   <li>`{gen_event,Module,Args}' adds custom module of {@link gen_event}
 %%       behaviour to `error_logger' process. Remember to handle all messages
 %%       specified in {@link error_logger} module documentation
-%%       (here's {@link error_logger_event(). local copy}).</li>
+%%       (here's {@link indira_log:error_logger_event(). local copy}).</li>
 %% </ul>
-
--type log_destination() ::
-    stdout | stderr
-  | {stdout, color|colour} | {stderr, color|colour}
-  | {file, Filename :: string()} % what about log rotation?
-  | syslog
-  | {syslog, DestHost :: atom() | string() | inet:ip_address()}
-  | {syslog, {Host :: atom() | string() | inet:ip_address(),
-               Port :: integer()}}
-  | lager
-  | {lager, Config :: term()}
-  | {gen_event, Module :: term(), Args :: term()}.
-
-%% }}}
-%%----------------------------------------------------------
-%% error_logger_event() {{{
-
-%% @type error_logger_event() =
-%%     {info_msg | warning_msg | error,
-%%       GroupLeader :: pid(),
-%%       {EventOrigin :: pid(), Format :: string() | atom(), Data :: list()}}
-%%   | {info_report | warning_report | error_report,
-%%       {EventOrigin :: pid(), Type :: atom(), Report :: term()}}.
-%%
-%% Event structure extracted from {@link error_logger} documentation.
-%%
-%% Note that while {@link error_logger:info_msg/1} and
-%% {@link error_logger:warning_msg/1} produce `*_msg' events,
-%% {@link error_logger:error_msg/1} produces just `error'.
-%% `error_report' keeps the convention, however.
-%%
-%% `EventOrigin' is the process that generated event (that is, called
-%% {@link error_logger:info_msg/1} or its companion).
-%%
-%% `Type' is a type of report. Some typical values include:
-%% <ul>
-%%   <li>`std_info', `std_warning', `std_error' for
-%%       {@link error_logger:info_report/1},
-%%       {@link error_logger:warning_report/1},
-%%       {@link error_logger:error_report/1}</li>
-%%   <li>`progress' for application start report</li>
-%%   <li>`supervisor_report' for errors from supervisor</li>
-%% </ul>
-%% `Type' in error report can be specified by calling
-%% {@link error_logger:error_report/2} (and similar thing for info and
-%% warning).
-
--type error_logger_event() ::
-    {info_msg | warning_msg | error,
-      GroupLeader :: pid(),
-      {EventOrigin :: pid(), Format :: string() | atom(), Data :: list()}}
-  | {info_report | warning_report | error_report,
-      {EventOrigin :: pid(), Type :: atom(), Report :: term()}}.
 
 %% }}}
 %%----------------------------------------------------------
 %% event_filter_fun() {{{
 
-%% @type event_filter_fun() =
-%%   fun(
-%%     (error_logger_event()) ->
-%%       ok | {replace, error_logger_event()} | ignore
-%%   ).
-%%
+-type event_filter_fun() ::
+  fun((indira_log:error_logger_event()) ->
+        ok | {replace, indira_log:error_logger_event()} | ignore).
 %% Function that filters events before entering log handler. The function can
 %% decide to pass the event unchanged, to alter the event or to ignore it
 %% altogether. The decision concerns just the log destination attached to this
@@ -324,9 +140,6 @@
 %% events or compressing them to a single complex event. It should be as fast
 %% as possible, and processing multiple events should be done by external
 %% tools.
-
--type event_filter_fun() ::
-  fun((error_logger_event()) -> ok | {replace, error_logger_event()} | ignore).
 
 %% }}}
 %%----------------------------------------------------------
@@ -340,10 +153,14 @@
 %% ```
 %% $ erl \
 %%     -indira listen '[{indira_tcp, {any,5500}}]' \
-%%     -indira commander some_module \
+%%     -indira command '{some_module, []}' \
 %%     -s indira \
 %%     other args ...
 %% '''
+
+-spec start() ->
+  ok | {error, term()}.
+
 start() ->
   application:start(indira, permanent).
 
@@ -352,54 +169,15 @@ start() ->
 %%%---------------------------------------------------------------------------
 
 %%----------------------------------------------------------
-%% convenience wrappers for Indira's own options {{{
-
-%% @doc Set commander address.
-%%
-%%   This function is intended to be called before
-%%   `application:start(indira)' and is a simple wrapper over
-%%   {@link application:set_env/3}.
-set_commander(Commander) ->
-  % remember that this is called from escript, when Indira was not started yet
-  case application:load(indira) of
-    ok -> ok;
-    {error, {already_loaded, indira}} -> ok;
-    {error, Reason} -> erlang:error(Reason)
-  end,
-  application:set_env(indira, commander, Commander),
-  ok.
-
-%% @doc Add listener to list of listeners started with Indira.
-%%
-%%   This function is intended to be called before
-%%   `application:start(indira)' and is a simple wrapper over
-%%   {@link application:set_env/3}.
-add_listener(Module, Arg) ->
-  % remember that this is called from escript, when Indira was not started yet
-  case application:load(indira) of
-    ok -> ok;
-    {error, {already_loaded, indira}} -> ok;
-    {error, Reason} -> erlang:error(Reason)
-  end,
-  case application:get_env(indira, listen) of
-    undefined -> OldListeners = [];
-    {ok, OldListeners} -> ok
-  end,
-  application:set_env(indira, listen, [{Module, Arg} | OldListeners]),
-  ok.
-
-%% }}}
-%%----------------------------------------------------------
 %% set application configuration parameters (environment) {{{
 
-%% @doc Set list of configuration options for appropriate applications.
-set_environment([]) ->
-  ok;
-set_environment([{App, Opt, Value} | Options]) ->
-  set_option(App, Opt, Value),
-  set_environment(Options).
-
 %% @doc Set configuration option for specified application.
+%%
+%%   Raises an exception (`erlang:error()') on application loading error.
+
+-spec set_option(atom(), atom(), term()) ->
+  ok | no_return().
+
 set_option(App, Option, Value) ->
   case application:load(App) of
     ok -> ok;
@@ -408,54 +186,16 @@ set_option(App, Option, Value) ->
   end,
   application:set_env(App, Option, Value).
 
-%% @doc Load application configuration file (suitable for <i>-config</i> VM
-%%   option).
-%%
-%%   Note that <i>unloading</i> an application mentioned in the file loaded by
-%%   this function may make the configuration to be lost. Please don't unload
-%%   applications.
-
--spec load_app_config(string()) ->
-  ok | {error, term()}.
-
-load_app_config(File) ->
-  case file:consult(File) of
-    % AppConfigList :: [ {AppName :: atom(), [ {K :: atom(), V :: term()} ]} ]
-    {ok, [AppConfigList]} ->
-      load_app_config_list(AppConfigList);
-    {ok, _} ->
-      {error, badformat};
-    {error, _Reason} = Error ->
-      Error
-  end.
-
-%% @doc Load applications and set their config variables according to the
-%%   <i>-config</i> list.
-
--spec load_app_config_list([ {atom(), [{atom(), term()}]} ]) ->
-  ok | {error, term()}.
-
-load_app_config_list([] = _AppConfigList) ->
-  ok;
-load_app_config_list([{AppName, Config} | Rest]) ->
-  case application:load(AppName) of
-    ok ->
-      [application:set_env(AppName, K, V) || {K,V} <- Config],
-      load_app_config_list(Rest);
-    {error, {already_loaded, AppName}} ->
-      [application:set_env(AppName, K, V) || {K,V} <- Config],
-      load_app_config_list(Rest);
-    {error, _Reason} = Error ->
-      % stop here
-      Error
-  end.
-
 %% }}}
 %%----------------------------------------------------------
 %% sleep forever {{{
 
 %% @doc Sleep forever. Function intended for use in `main()' function in
 %%   `escript' code.
+
+-spec sleep_forever() ->
+  no_return().
+
 sleep_forever() ->
   % FIXME: no code release on Indira code upgrade
   receive
@@ -470,26 +210,37 @@ sleep_forever() ->
 %% @doc Start application along with all its dependencies.
 %%   This function is intended for being run from `escript' code.
 %%
-%%   <b>NOTE</b>: Application start type is `permanent'.
+%%   <b>NOTE</b>: Application start type is `permanent', which is a different
+%%   default than {@link application:start/1} has.
+%%
 %% @see application:start/2
+
+-spec start_rec(atom()) ->
+  ok | {error, term()}.
+
 start_rec(App) ->
   % defaults to the same as application:start()
   start_rec(App, permanent).
 
 %% @doc Start application along with all its dependencies.
 %%   This function is intended for being run from `escript' code.
+%%
 %% @see application:start/2
+
+-spec start_rec(atom(), permanent | transient | temporary) ->
+  ok | {error, term()}.
+
 start_rec(App, StartType) ->
   case application:start(App, StartType) of
+    ok ->
+      ok;
+    {error, {already_started, App}} ->
+      ok;
     {error, {not_started, AppDep}} ->
       ok = start_rec(AppDep, StartType),
       start_rec(App, StartType);
-    {error, {already_started, App}} ->
-      ok;
-    {error, _Any} = Error ->
-      Error;
-    ok ->
-      ok
+    {error, Reason} ->
+      {error, Reason}
   end.
 
 %% }}}
@@ -497,22 +248,33 @@ start_rec(App, StartType) ->
 %% write pidfile {{{
 
 %% @doc Write PID file.
-%% @TODO Remove PID file when shutting down.
+%%   The file will be removed on shutdown.
+
+-spec write_pidfile(file:filename() | undefined) ->
+  ok.
+
 write_pidfile(undefined) ->
   ok;
 write_pidfile(Filename) ->
-  Pid = iolist_to_binary([os:getpid(), "\n"]),
-  ok = file:write_file(Filename, Pid).
+  ok = set_option(indira, pidfile, Filename).
 
 %% }}}
 %%----------------------------------------------------------
 %% `cd /' {{{
 
 %% @doc Change directory to <tt>/</tt>.
+
+-spec chdir() ->
+  ok.
+
 chdir() ->
   ok = file:set_cwd("/").
 
 %% @doc Change directory.
+
+-spec chdir(file:filename()) ->
+  ok.
+
 chdir(Directory) ->
   ok = file:set_cwd(Directory).
 
@@ -536,16 +298,11 @@ chdir(Directory) ->
 %%   <b>NOTE</b>: Indira assumes here that a single Erlang VM only hosts
 %%   a single daemon, that is, there is one main function of the VM instance.
 %%   There could be other functions, but they're considered auxiliary.
-%%
-%% @spec setup_logging(atom() | string(),
-%%                     [redirect_stdio | log_destination()
-%%                       | {filter, event_filter_fun(), log_destination()}]) ->
-%%   ok | {error, [Reasons]}
 
 -spec setup_logging(atom() | string(),
-                    [redirect_stdio | log_destination()
-                      | {filter, event_filter_fun(), log_destination()}]) ->
-  ok | {error, [term()]}.
+                    [redirect_stdio | log_destination() |
+                      {filter, event_filter_fun(), log_destination()}]) ->
+  ok | {error, [Reason :: term()]}.
 
 setup_logging(DaemonName, Options) when is_atom(DaemonName) ->
   setup_logging(atom_to_list(DaemonName), Options);
@@ -555,8 +312,9 @@ setup_logging(DaemonName, Options) ->
   [error_logger:delete_report_handler(H) ||
     H <- gen_event:which_handlers(error_logger), H =/= error_logger],
 
-  Results =
-    [register_log_dest(DaemonName, D) || D <- Options, D =/= redirect_stdio],
+  Results = [
+    register_log_dest(DaemonName, D) || D <- Options, D =/= redirect_stdio
+  ],
 
   % TODO: handle `redirect_stdio' option
 
@@ -571,7 +329,8 @@ setup_logging(DaemonName, Options) ->
 %% @doc Register an event handler in {@link error_logger}.
 
 -spec register_log_dest(string(),
-  {filter, event_filter_fun(), log_destination()} | log_destination()) ->
+                        {filter, event_filter_fun(), log_destination()} |
+                        log_destination()) ->
   ok | {error, term()}.
 
 %% filter + log destination
@@ -638,22 +397,40 @@ register_log_dest(_DaemonName, {gen_event, Module, Args}) ->
 %% distributed Erlang {{{
 
 %% @doc Configure Erlang networking (distributed Erlang).
+%%
+%%   Starting the networking is delayed until {@link distributed_start/0} is
+%%   called.
+%%
+%%   Default hostname type is `longnames'.
+
+-spec distributed(node()) ->
+  ok | {error, term()}.
+
 distributed(Name) ->
   distributed(Name, longnames).
 
 %% @doc Configure Erlang networking (distributed Erlang).
+%%
+%%   Starting the networking is delayed until {@link distributed_start/0} is
+%%   called.
+
+-spec distributed(node(), shortnames | longnames) ->
+  ok | {error, term()}.
+
 distributed(Name, NameType) ->
-  % NameType :: shortnames | longnames
-  net_kernel:start([Name, NameType]).
+  distributed(Name, NameType, none).
 
 %% @doc Configure Erlang networking (distributed Erlang).
 %%
+%%   Starting the networking is delayed until {@link distributed_start/0} is
+%%   called.
+%%
 %%   When providing cookie in the form of `{file,Path}', only the first line
 %%   (with `"\n"' stripped) will be used as cookie.
-%%
-%% @spec distributed(node(), shortnames | longnames,
-%%                   atom() | string() | binary() | {file, Path::string()}) ->
-%%   ok | {error, Reason}
+
+-spec distributed(node(), shortnames | longnames, Cookie) ->
+  ok | {error, term()}
+  when Cookie :: atom() | string() | binary() | {file, file:filename()}.
 
 distributed(Name, NameType, {file, CookieFile} = _Cookie) ->
   case file:read_file(CookieFile) of
@@ -677,13 +454,27 @@ distributed(Name, NameType, Cookie) when is_binary(Cookie) ->
   distributed(Name, NameType, binary_to_atom(Cookie, utf8));
 
 distributed(Name, NameType, Cookie) when is_atom(Cookie) ->
-  case net_kernel:start([Name, NameType]) of
-    {ok, _NetSupPid} ->
-      erlang:set_cookie(node(), Cookie),
-      ok;
-    {error, Reason} ->
-      {error, Reason}
+  case NameType of
+    shortnames -> ok = set_option(indira, net, {Name, NameType, none});
+    longnames  -> ok = set_option(indira, net, {Name, NameType, none});
+    _ -> {error, badarg}
   end.
+
+%% @doc Start Erlang networking, as configured through {@link distributed/3}.
+
+-spec distributed_start() ->
+  ok | {error, term()}.
+
+distributed_start() ->
+  indira_dist_erl:bring_up().
+
+%% @doc Stop Erlang networking.
+
+-spec distributed_stop() ->
+  ok | {error, term()}.
+
+distributed_stop() ->
+  indira_dist_erl:tear_down().
 
 %% }}}
 %%----------------------------------------------------------
