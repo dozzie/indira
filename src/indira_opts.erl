@@ -15,26 +15,58 @@
 -export([strsplit/2]).
 %% command line arguments parsing
 -export([foldg/3, folds/3]).
+%% propagating config over application environment
+-export([set_env/4]).
 
 %%%---------------------------------------------------------------------------
 %%% data types {{{
+
+%%----------------------------------------------------------
 
 -type argument() :: string().
 %% Command line argument.
 
 -type accumulator() :: term().
+%% Fold function accumulator.
 
 -type foldg_fun_simple() ::
   fun(([argument(), ...], accumulator()) ->
         accumulator() | {take, pos_integer(), accumulator()} | {error, term()}).
+%% Fold function for non-splitting general fold.
 
 -type foldg_fun_split() ::
   fun((single | split, [argument(), ...], accumulator()) ->
         accumulator() | {take, pos_integer(), accumulator()} | {error, term()}).
+%% Fold function for `--foo=bar' splitting general fold.
 
 -type folds_fun() ::
   fun((argument() | [argument(), ...], accumulator()) ->
         accumulator() | {need, pos_integer()} | {error, term()}).
+%% Fold function for simple fold.
+
+%%----------------------------------------------------------
+
+-type config() :: term().
+%% Structure with configuration options loaded from a file.
+
+-type config_key() :: term().
+%% Option name to lookup in {@type config()}.
+
+-type config_value() :: term().
+%% Value of {@type config_key()} in {@type config()}.
+
+-type env_key() :: {AppName :: atom(), Parameter :: atom()}.
+%% Application environment parameter name.
+
+-type set_spec() ::
+    {config_key(), env_key()}
+  | {config_key(), env_key(), [set_option()]}.
+%% Specification for setting an app parameter.
+
+-type set_option() :: append | if_set | if_unset.
+%% When and how to set an app parameter.
+
+%%----------------------------------------------------------
 
 %%% }}}
 %%%---------------------------------------------------------------------------
@@ -206,6 +238,141 @@ folds_second_call(Fun, Acc, N, Opt, ArgList) ->
     error ->
       {error, {Opt, not_enough_args}}
   end.
+
+%% }}}
+%%----------------------------------------------------------
+
+%%%---------------------------------------------------------------------------
+%%% propagating config over application environment
+%%%---------------------------------------------------------------------------
+
+%% @doc Set application environment from config according to specification.
+%%   Function pre-loads all the (potentially) necessary applications.
+%%
+%%   If validation function (called as `Validate(Key, EnvKey, Value)') returns
+%%   `{error, Reason}', it will be reported as
+%%   `{error, {Key, EnvKey, Reason}}'.
+
+-spec set_env(ConfigGet, Validate, config(), [set_spec()]) ->
+  ok | {error, {config_key(), env_key(), term()} | term()}
+  when
+    ConfigGet :: fun((config_key(), config()) ->
+                       config_value()),
+    Validate  :: fun((config_key(), env_key(), config_value()) ->
+                       ok | {ok, NewValue :: term()} |
+                       ignore | {error, term()}).
+
+set_env(ConfigGet, Validate, Config, SetSpecs) ->
+  case load_apps(SetSpecs) of
+    ok -> set_env_loop(ConfigGet, Validate, Config, SetSpecs);
+    {error, Reason} -> {error, Reason}
+  end.
+
+%%----------------------------------------------------------
+%% set_env_loop() {{{
+
+%% @doc Set app environment, worker for {@link set_env/4}.
+
+set_env_loop(_ConfigGet, _Validate, _Config, [] = _SetSpecs) ->
+  ok;
+set_env_loop(ConfigGet, Validate, Config, [Spec | RestSpecs] = _SetSpecs) ->
+  case Spec of
+    {Key, EnvKey, SetOpts} -> ok;
+    {Key, EnvKey} -> SetOpts = []
+  end,
+  Value = ConfigGet(Key, Config),
+  case Validate(Key, EnvKey, Value) of
+    ignore ->
+      set_env_loop(ConfigGet, Validate, Config, RestSpecs);
+    ok ->
+      set_app_env(EnvKey, Value, SetOpts),
+      set_env_loop(ConfigGet, Validate, Config, RestSpecs);
+    {ok, EnvValue} ->
+      set_app_env(EnvKey, EnvValue, SetOpts),
+      set_env_loop(ConfigGet, Validate, Config, RestSpecs);
+    {error, Reason} ->
+      {error, {Key, EnvKey, Reason}}
+  end.
+
+%% }}}
+%%----------------------------------------------------------
+%% set_app_env() {{{
+
+%% @doc Set an application parameter to specified value.
+
+-spec set_app_env(env_key(), term(), [set_option()]) ->
+  ok.
+
+set_app_env({App, Param} = _EnvKey, Value, Options) ->
+  case should_set(App, Param, Options) of
+    true ->
+      case should_append(Options) of
+        true ->
+          CurrentValue = case application:get_env(App, Param) of
+            {ok, V} -> V;
+            undefined -> []
+          end,
+          application:set_env(App, Param, CurrentValue ++ [Value]);
+        false ->
+          application:set_env(App, Param, Value)
+      end;
+    false ->
+      ok
+  end.
+
+%% @doc Determine whether an option should be set or not, according to
+%%   options.
+
+-spec should_set(atom(), atom(), [set_option()]) ->
+  boolean().
+
+should_set(App, Param, Options) ->
+  Set = case application:get_env(App, Param) of
+    {ok, _} -> set;
+    undefined -> unset
+  end,
+  IfSet   = proplists:get_bool(if_set, Options),
+  IfUnset = proplists:get_bool(if_unset, Options),
+  case {IfSet, IfUnset, Set} of
+    {true, _, set}    -> true;
+    {_, true, unset}  -> true;
+    {false, false, _} -> true; % if neither specified, set always
+    {_, _, _}         -> false
+  end.
+
+%% @doc Determine whether an option should be appended to a current value.
+
+-spec should_append([set_option()]) ->
+  boolean().
+
+should_append(Options) ->
+  proplists:get_bool(append, Options).
+
+%% }}}
+%%----------------------------------------------------------
+%% load_apps() {{{
+
+%% @doc Load applications that will be potentially used in `SetSpecs'.
+
+-spec load_apps([set_spec()]) ->
+  ok | {error, term()}.
+
+load_apps([] = _SetSpecs) ->
+  ok;
+load_apps([{_Key, {App, _Par}} | RestSpecs] = _SetSpecs) ->
+  case application:load(App) of
+    ok -> load_apps(RestSpecs);
+    {error, {already_loaded, App}} -> load_apps(RestSpecs);
+    {error, Reason} -> {error, Reason}
+  end;
+load_apps([{_Key, {App, _Par}, _Opts} | RestSpecs] = _SetSpecs) ->
+  case application:load(App) of
+    ok -> load_apps(RestSpecs);
+    {error, {already_loaded, App}} -> load_apps(RestSpecs);
+    {error, Reason} -> {error, Reason}
+  end;
+load_apps(_SetSpecs) ->
+  {error, badarg}.
 
 %% }}}
 %%----------------------------------------------------------
