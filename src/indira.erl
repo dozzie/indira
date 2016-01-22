@@ -64,7 +64,7 @@
 -export([start/0]).
 
 %% API for escript
--export([set_option/3]).
+-export([set_option/3, args_foldg/3, args_folds/3, set_env/4]).
 -export([sleep_forever/0]).
 -export([start_rec/1, start_rec/2]).
 -export([write_pidfile/1]).
@@ -185,6 +185,37 @@ set_option(App, Option, Value) ->
     {error, Reason} -> erlang:error(Reason)
   end,
   application:set_env(App, Option, Value).
+
+%% @doc Parse command line arguments using {@link indira_opts:foldg/3}.
+%%
+%% @see indira_opts:foldg/3
+
+-spec args_foldg(fun(), term(), [string()]) ->
+  {ok, term()} | {error, term()}.
+
+args_foldg(Fun, Acc, AccList) ->
+  indira_opts:foldg(Fun, Acc, AccList).
+
+%% @doc Parse command line arguments using {@link indira_opts:folds/3}.
+%%
+%% @see indira_opts:folds/3
+
+-spec args_folds(fun(), term(), [string()]) ->
+  {ok, term()} | {error, term()}.
+
+args_folds(Fun, Acc, AccList) ->
+  indira_opts:folds(Fun, Acc, AccList).
+
+%% @doc Populate application environment with config loaded from file, using
+%%   {@link indira_opts:set_env/4}.
+%%
+%% @see indira_opts:set_env/4
+
+-spec set_env(fun(), fun(), term(), [tuple()]) ->
+  ok | {error, term()}.
+
+set_env(ConfigGet, Validate, Config, SetSpecs) ->
+  indira_opts:set_env(ConfigGet, Validate, Config, SetSpecs).
 
 %% }}}
 %%----------------------------------------------------------
