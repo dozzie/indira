@@ -7,7 +7,7 @@
 %%%   <ul>
 %%%     <li>{@type @{unix, socket(), Data :: binary()@}}</li>
 %%%     <li>{@type @{unix_closed, socket()@}}</li>
-%%%     <li>{@type @{unix_error, socket(), Reason :: term()@}}</li>
+%%%     <li>{@type @{unix_error, socket(), Reason :: inet:posix()@}}</li>
 %%%   </ul>
 %%%
 %%%   <b>Warning</b>: port driver that is a backend for this module uses
@@ -68,7 +68,7 @@
 %% @doc Setup a socket listening on specified address.
 
 -spec listen(string()) ->
-  {ok, server_socket()} | {error, term()}.
+  {ok, server_socket()} | {error, inet:posix()}.
 
 listen(Address) ->
   spawn_driver(listen, Address).
@@ -77,7 +77,7 @@ listen(Address) ->
 %%   The function waits infinitely for a client.
 
 -spec accept(server_socket()) ->
-  {ok, connection_socket()} | {error, term()}.
+  {ok, connection_socket()} | {error, inet:posix()}.
 
 accept(Socket) ->
   case try_accept(Socket) of
@@ -91,7 +91,7 @@ accept(Socket) ->
 %% @doc Accept a client connection.
 
 -spec accept(server_socket(), timeout()) ->
-  {ok, connection_socket()} | {error, timeout} | {error, term()}.
+  {ok, connection_socket()} | {error, timeout | inet:posix()}.
 
 accept(Socket, infinity = _Timeout) ->
   accept(Socket);
@@ -131,7 +131,7 @@ accept(Socket, Timeout) when Timeout > ?LOOP_INTERVAL ->
 %%   {@link recv/2} and {@link recv/3} won't work on such socket.
 
 -spec connect(string(), [option()]) ->
-  {ok, connection_socket()} | {error, term()}.
+  {ok, connection_socket()} | {error, badarg | inet:posix()}.
 
 connect(Address, Opts) ->
   case spawn_driver(connect, Address) of
@@ -147,7 +147,7 @@ connect(Address, Opts) ->
 %% @doc Send data to the socket.
 
 -spec send(connection_socket(), iolist()) ->
-  ok | {error, term()}.
+  ok | {error, badarg}.
 
 send(Socket, Data) ->
   try
@@ -161,7 +161,7 @@ send(Socket, Data) ->
 %% @doc Read `Length' bytes from socket.
 
 -spec recv(connection_socket(), non_neg_integer()) ->
-  {ok, binary()} | {error, term()}.
+  {ok, binary()} | {error, closed | inet:posix()}.
 
 recv(Socket, Length) ->
   case erlang:port_call(Socket, ?PORT_COMMAND_RECV, Length) of
@@ -177,7 +177,7 @@ recv(Socket, Length) ->
 %% @doc Read `Length' bytes from socket (with timeout).
 
 -spec recv(connection_socket(), non_neg_integer(), timeout()) ->
-  {ok, binary()} | {error, term()}.
+  {ok, binary()} | {error, timeout | closed | inet:posix()}.
 
 recv(Socket, Length, infinity = _Timeout) ->
   recv(Socket, Length);
@@ -214,7 +214,7 @@ recv(Socket, Length, Timeout) when Timeout > ?LOOP_INTERVAL ->
 %% @doc Set the socket owner.
 
 -spec controlling_process(socket(), pid()) ->
-  ok | {error, term()}.
+  ok | {error, not_owner | badarg}.
 
 controlling_process(Socket, Pid) ->
   try
@@ -232,14 +232,14 @@ controlling_process(Socket, Pid) ->
         {error, not_owner}
     end
   catch
-    error:Reason ->
-      {error, Reason}
+    error:_ ->
+      {error, badarg}
   end.
 
 %% @doc Set socket options.
 
 -spec setopts(socket(), [option()]) ->
-  ok | {error, term()}.
+  ok | {error, badarg}.
 
 setopts(_Socket, [] = _Options) ->
   ok;
@@ -286,7 +286,7 @@ close(Socket) when is_port(Socket) ->
 %% @doc Try accepting connection.
 
 -spec spawn_driver(listen | connect, string()) ->
-  {ok, socket()} | {error, term()}.
+  {ok, socket()} | {error, inet:posix()}.
 
 spawn_driver(Type, Address) ->
   DriverCommand = case Type of
