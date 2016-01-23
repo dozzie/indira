@@ -14,6 +14,11 @@
 %%%     <li>{@type inet:ip_address()} (i.e. `{N1,N2,N3,N4}' for IPv4)</li>
 %%%     <li>`` 'any' '' to indicate no binding to any particular interface</li>
 %%%   </ul>
+%%%
+%%%   == Returned errors ==
+%%%
+%%%   Errors returned by this module can all (except for `{error,
+%%%   timeout}') be parsed by {@link inet:format_error/1}.
 %%% @end
 %%%---------------------------------------------------------------------------
 

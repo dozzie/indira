@@ -7,6 +7,11 @@
 %%%   This module expects a string `SocketPath' as a parameter (see
 %%%   {@link indira}).
 %%%
+%%%   == Returned errors ==
+%%%
+%%%   Errors returned by this module can all (except for `{error,
+%%%   timeout}') be parsed by {@link inet:format_error/1}.
+%%%
 %%% @TODO Support for mode and ownership.
 %%% @end
 %%%---------------------------------------------------------------------------
@@ -44,12 +49,24 @@ send_one_line(Address, Line, Timeout) ->
     {ok, Sock} ->
       case indira_af_unix:send(Sock, [Line, $\n]) of
         ok ->
-          Result = indira_af_unix:recv(Sock, 0, Timeout),
+          case indira_af_unix:recv(Sock, 0, Timeout) of
+            {ok, Result} ->
+              indira_af_unix:close(Sock),
+              {ok, Result};
+            {error, closed} ->
+              % unexpected EOF; close enough to "connection reset" error to
+              % pretend it was one
+              indira_af_unix:close(Sock),
+              {error, econnreset};
+            {error, Reason} ->
+              indira_af_unix:close(Sock),
+              {error, Reason}
+          end;
+        {error, _Reason} ->
+          % only `{error,badarg}' can get here; pretend it was "connection
+          % reset" error
           indira_af_unix:close(Sock),
-          Result;
-        {error, Reason} ->
-          indira_af_unix:close(Sock),
-          {error, Reason}
+          {error, econnreset}
       end;
     {error, Reason} ->
       {error, Reason}
