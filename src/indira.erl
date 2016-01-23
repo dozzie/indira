@@ -72,6 +72,7 @@
 -export([setup_logging/2]).
 -export([distributed/1, distributed/2, distributed/3]).
 -export([distributed_start/0, distributed_stop/0]).
+-export([send_one_command/3, send_one_command/4, retry_send_one_command/4]).
 
 -export_type([event_filter_fun/0, log_destination/0]).
 
@@ -506,6 +507,78 @@ distributed_start() ->
 
 distributed_stop() ->
   indira_dist_erl:tear_down().
+
+%% }}}
+%%----------------------------------------------------------
+%% send an administrative command to a daemon instance {{{
+
+%% @doc Open a connection to daemon's Indira, send a command, receive a reply.
+%%
+%%   `Module' implements {@link gen_indira_listener} behaviour, and `Address'
+%%   is (typically) the same tuple as one would specify for listening with
+%%   that module.
+
+-spec send_one_command(module(), term(), indira_json:struct()) ->
+  {ok, indira_json:struct()} | {error, badarg | bad_reply | term()}.
+
+send_one_command(Module, Address, Command) ->
+  send_one_command(Module, Address, Command, infinity).
+
+%% @doc Open a connection to daemon's Indira, send a command, receive a reply.
+%%
+%%   `Module' implements {@link gen_indira_listener} behaviour, and `Address'
+%%   is (typically) the same tuple as one would specify for listening with
+%%   that module.
+
+-spec send_one_command(module(), term(), indira_json:struct(), timeout()) ->
+  {ok, indira_json:struct()} | {error, badarg | bad_reply | term()}.
+
+send_one_command(Module, Address, Command, Timeout) ->
+  case indira_json:encode(Command) of
+    {ok, Line} ->
+      case Module:send_one_line(Address, Line, Timeout) of
+        {ok, ReplyLine} ->
+          case indira_json:decode(ReplyLine) of
+            {ok, Reply} ->
+              {ok, Reply};
+            {error, badarg} ->
+              {error, bad_reply}
+          end;
+        {error, Reason} ->
+          {error, Reason}
+      end;
+    {error, badarg} ->
+      {error, badarg}
+  end.
+
+%% @doc Open a connection to daemon's Indira, send a command, receive a reply;
+%%   retry on refused connection.
+%%
+%%   `Module' implements {@link gen_indira_listener} behaviour, and `Address'
+%%   is (typically) the same tuple as one would specify for listening with
+%%   that module.
+
+-spec retry_send_one_command(module(), term(), indira_json:struct(),
+                             timeout()) ->
+  {ok, indira_json:struct()} | {error, badarg | bad_reply | term()}.
+
+retry_send_one_command(Module, Address, Command, Timeout) ->
+  case indira_json:encode(Command) of
+    {ok, Line} ->
+      case Module:retry_send_one_line(Address, Line, Timeout) of
+        {ok, ReplyLine} ->
+          case indira_json:decode(ReplyLine) of
+            {ok, Reply} ->
+              {ok, Reply};
+            {error, badarg} ->
+              {error, bad_reply}
+          end;
+        {error, Reason} ->
+          {error, Reason}
+      end;
+    {error, badarg} ->
+      {error, badarg}
+  end.
 
 %% }}}
 %%----------------------------------------------------------

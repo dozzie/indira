@@ -23,6 +23,7 @@
 
 %% Indira listener API
 -export([child_spec/1]).
+-export([send_one_line/3, retry_send_one_line/3]).
 
 %% gen_server callbacks
 -export([init/1, terminate/2]).
@@ -49,6 +50,44 @@ child_spec({Host, Port} = _Args) ->
   {ignore,
     {?MODULE, start_link, [Host, Port]},
     permanent, 5000, worker, [?MODULE]}.
+
+%% @private
+%% @doc Send a line to socket.
+
+-spec send_one_line({inet:hostname() | inet:ip_address(), inet:port_number()},
+                    iolist(), timeout()) ->
+  {ok, iolist()} | {error, term()}.
+
+send_one_line({Addr, Port} = _Address, Line, Timeout) ->
+  case gen_udp:open(0, [{active, false}, binary]) of
+    {ok, Sock} ->
+      case gen_udp:send(Sock, Addr, Port, [Line, $\n]) of
+        ok ->
+          case gen_udp:recv(Sock, 0, Timeout) of
+            % XXX: this will accept anything that was sent to this socket,
+            % even if it didn't come from Addr:Port
+            {ok, {_Addr, _Port, ReplyLine}} ->
+              gen_udp:close(Sock),
+              {ok, ReplyLine};
+            {error, Reason} ->
+              gen_udp:close(Sock),
+              {error, Reason}
+          end;
+        {error, Reason} ->
+          gen_udp:close(Sock),
+          {error, Reason}
+      end;
+    {error, Reason} ->
+      {error, Reason}
+  end.
+
+%% @private
+%% @doc Send a line to socket, retrying when socket refuses connections.
+%%   Hell, it's UDP. It doesn't refuse connections in any reliable way, so
+%%   just do the same as {@link send_one_line/3}.
+
+retry_send_one_line(Address, Line, Timeout) ->
+  send_one_line(Address, Line, Timeout).
 
 %%%---------------------------------------------------------------------------
 %%% public API for supervision tree

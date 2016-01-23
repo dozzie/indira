@@ -52,6 +52,33 @@
 %%%             indira_unix})</li>
 %%%       </ul>
 %%%     </li>
+%%%     <li>`send_one_line(Address, Line, Timeout) -> {ok, ReplyLine} | {error, Reason}'
+%%%       <ul>
+%%%         <li>`Address' ({@type term()}) -- address to send command to</li>
+%%%         <li>`Line' ({@type iolist()}) -- line with serialized command
+%%%             (trailing newline <em>not included</em>)</li>
+%%%         <li>`Timeout' ({@type timeout()}) -- how long to wait for reply
+%%%             (milliseconds or `infinity')</li>
+%%%         <li>`ReplyLine' ({@type iolist()}) -- line with the reply to
+%%%             command (will be deserialized by `send_one_line()' caller);
+%%%             may, but doesn't need to, include trailing newline</li>
+%%%         <li>`Reason' ({@type term()}) -- error description</li>
+%%%       </ul>
+%%%     </li>
+%%%     <li>`retry_send_one_line(Address, Line, Timeout) -> {ok, ReplyLine} | {error, Reason}'
+%%%       <ul>
+%%%         <li>`Address' ({@type term()}) -- address to send command to</li>
+%%%         <li>`Line' ({@type iolist()}) -- line with serialized command
+%%%             (trailing newline <em>not included</em>)</li>
+%%%         <li>`Timeout' ({@type timeout()}) -- how long to wait for reply
+%%%             (milliseconds or `infinity')</li>
+%%%         <li>`ReplyLine' ({@type iolist()}) -- line with the reply to
+%%%             command (will be deserialized by `retry_send_one_line()'
+%%%             caller); may, but doesn't need to, include trailing
+%%%             newline</li>
+%%%         <li>`Reason' ({@type term()}) -- error description</li>
+%%%       </ul>
+%%%     </li>
 %%%   </ul>
 %%%
 %%%   Several fields of what `child_spec(Addr)' returns are ignored. Assuming
@@ -85,11 +112,28 @@
 
 %% sending commands to router
 -export([command/1, command/2]).
+%% timer handling
+-export([setup_timer/1, cancel_timer/1, timer_fired/2]).
+
+-export_type([timer/0]).
+
+%%%---------------------------------------------------------------------------
+
+-type timer() :: {reference(), reference()}.
+%% Handle to a timer created with {@link setup_timer/1}.
 
 %%%---------------------------------------------------------------------------
 
 -callback child_spec(ListenAddress :: term()) ->
   supervisor:child_spec().
+
+-callback send_one_line(Address :: term(), Line :: iolist(),
+                        Timeout :: timeout()) ->
+  {ok, ReplyLine :: iolist()} | {error, term()}.
+
+-callback retry_send_one_line(Address :: term(), Line :: iolist(),
+                              Timeout :: timeout()) ->
+  {ok, ReplyLine :: iolist()} | {error, term()}.
 
 %%%---------------------------------------------------------------------------
 %%% sending commands to router
@@ -130,6 +174,44 @@ command(Line) ->
 
 command(RoutingKey, Line) ->
   indira_commander:command(RoutingKey, Line).
+
+%%%---------------------------------------------------------------------------
+
+%% @doc Setup a timer to fire after `Timeout' milliseconds.
+%%   Handy for implementing `retry_send_one_line()'.
+
+-spec setup_timer(timeout()) ->
+  timer().
+
+setup_timer(Timeout) ->
+  MsgRef = make_ref(),
+  TimerRef = erlang:send_after(Timeout, self(), {timeout, MsgRef}),
+  {MsgRef, TimerRef}.
+
+%% @doc Cancel a timer set up with {@link setup_timer/1}.
+%%   Handy for implementing `retry_send_one_line()'.
+
+-spec cancel_timer(timer()) ->
+  ok.
+
+cancel_timer({_MsgRef, TimerRef} = Timer) ->
+  erlang:cancel_timer(TimerRef),
+  timer_fired(Timer, 0), % flush, ignore the result
+  ok.
+
+%% @doc Check if timer fired or will fire within `Timeout' milliseconds.
+%%   Handy for implementing `retry_send_one_line()'.
+
+-spec timer_fired(timer(), timeout()) ->
+  boolean().
+
+timer_fired({MsgRef, _TimerRef} = _Timer, Timeout) ->
+  receive
+    {timeout, MsgRef} ->
+      true
+  after Timeout ->
+      false
+  end.
 
 %%%---------------------------------------------------------------------------
 %%% vim:ft=erlang:foldmethod=marker
