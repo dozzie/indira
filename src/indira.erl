@@ -13,8 +13,9 @@
 %%%   == Indira configuration ==
 %%%
 %%%   Indira uses several configuration keys ({@link application:get_env/2}),
-%%%   of which two are most important:
-%%%   <i>listen</i> and <i>command</i>.
+%%%   of which two are most important: <i>listen</i> and <i>command</i>
+%%%   (there's also <i>net_start</i>, used for starting distributed Erlang;
+%%%   see {@link distributed/3} for details).
 %%%
 %%%   The value of <i>command</i> is a module name (with an arbitrary
 %%%   parameter) that implements {@link gen_indira_command} behaviour. It can
@@ -431,7 +432,8 @@ register_log_dest(_DaemonName, {gen_event, Module, Args}) ->
 %% @doc Configure Erlang networking (distributed Erlang).
 %%
 %%   Starting the networking is delayed until {@link distributed_start/0} is
-%%   called.
+%%   called. This can be changed by setting <i>net_start</i> environment:
+%%   `application:set_env(indira, net_start, true)'.
 %%
 %%   Default hostname type is `longnames'.
 
@@ -444,7 +446,8 @@ distributed(Name) ->
 %% @doc Configure Erlang networking (distributed Erlang).
 %%
 %%   Starting the networking is delayed until {@link distributed_start/0} is
-%%   called.
+%%   called. This can be changed by setting <i>net_start</i> environment:
+%%   `application:set_env(indira, net_start, true)'.
 
 -spec distributed(node(), shortnames | longnames) ->
   ok | {error, term()}.
@@ -455,7 +458,8 @@ distributed(Name, NameType) ->
 %% @doc Configure Erlang networking (distributed Erlang).
 %%
 %%   Starting the networking is delayed until {@link distributed_start/0} is
-%%   called.
+%%   called. This can be changed by setting <i>net_start</i> environment:
+%%   `application:set_env(indira, net_start, true)'.
 %%
 %%   When providing cookie in the form of `{file,Path}', only the first line
 %%   (with `"\n"' stripped) will be used as cookie.
@@ -493,6 +497,10 @@ distributed(Name, NameType, Cookie) when is_atom(Cookie) ->
   end.
 
 %% @doc Start Erlang networking, as configured through {@link distributed/3}.
+%%
+%%   This function <em>does not</em> start `epmd' port mapper daemon, which is
+%%   needed for distributed Erlang to work. `epmd' should be started
+%%   separately.
 
 -spec distributed_start() ->
   ok | {error, term()}.
