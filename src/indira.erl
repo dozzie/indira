@@ -487,8 +487,8 @@ distributed(Name, NameType, Cookie) when is_binary(Cookie) ->
 
 distributed(Name, NameType, Cookie) when is_atom(Cookie) ->
   case NameType of
-    shortnames -> ok = set_option(indira, net, {Name, NameType, none});
-    longnames  -> ok = set_option(indira, net, {Name, NameType, none});
+    shortnames -> ok = set_option(indira, net, {Name, NameType, Cookie});
+    longnames  -> ok = set_option(indira, net, {Name, NameType, Cookie});
     _ -> {error, badarg}
   end.
 
