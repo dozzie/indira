@@ -1,0 +1,21 @@
+Source: erlang-indira
+Maintainer: Stanislaw Klekot <dozzie@jarowit.net>
+Section: erlang
+Priority: optional
+Build-Depends: debhelper (>> 7.0.0), dh-rebar, erlang-base, erlang-dev
+
+Package: erlang-indira
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, erlang-base
+Description: Daemonization framework for Erlang
+ Indira is an application for turning Erlang applications into unix daemons
+ with as little effort as possible.
+
+Package: erlang-indira-doc
+Architecture: all
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Daemonization framework for Erlang - API documentation
+ Indira is an application for turning Erlang applications into unix daemons
+ with as little effort as possible.
+ .
+ This package contains API documentation generated from Indira's sources.
