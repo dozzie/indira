@@ -83,8 +83,8 @@
 %%%   <ul>
 %%%     <li><i>stop</i>, shutdown the daemon (usually called from
 %%%         initscript) (see {@link init:stop/0})</li>
-%%%     <li><i>is daemon running?</i>, wait for daemon to start
-%%%         (called from initscript)</li>
+%%%     <li><i>status</i>, check if the daemon is running, with an option to
+%%%         wait for boot process to finish (called from initscript)</li>
 %%%     <li><i>reload</i>, reload configuration stored in a file</li>
 %%%     <li><i>netconfig</i>, setup distributed Erlang (epmd, cookie and
 %%%         <i>-(s)name</i>), so an administrator can get shell and debug

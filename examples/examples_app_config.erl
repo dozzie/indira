@@ -59,6 +59,8 @@
 %  indira:sleep_forever().
 %
 % % simple and dumb command handler
+% % note that this will be passed as a fun, not as a module handler;
+% % see `gen_indira_command' docs
 %handle_command(<<"stop">> = _Command) ->
 %  init:stop(),
 %  ok;
@@ -82,7 +84,7 @@
 %  indira:setup_logging(my_app, [stdout]),
 %  indira:start_rec(indira),
 %  indira:sleep_forever().
-% % ...
+%...
 %'''
 %%%
 %%% @end

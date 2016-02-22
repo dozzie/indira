@@ -24,21 +24,22 @@
 %  ok;
 %
 %main(["stop"]) ->
-%  {ok, Sock} = indira_af_unix:connect(?ADMIN_SOCKET, [{active, false}]),
-%  {ok, Cmd} = indira_json:encode([{command, stop}]),
-%  ok = indira_af_unix:send(Sock, [Cmd, $\n]),
-%  case indira_af_unix:recv(Sock, 0) of
-%    {ok, Line} ->
-%      {ok, Reply} = indira_json:decode(Line),
+%  Command = [{command, stop}],
+%  Timeout = 10 * 1000, % 10 seconds
+%  case indira:send_one_command(indira_unix, ?ADMIN_SOCKET, Command, Timeout) of
+%    {ok, Reply} ->
 %      io:fwrite("reply: ~1024p~n", [Reply]);
 %    {error, closed} ->
 %      io:fwrite("shutdown~n");
+%    {error, enoent} ->
+%      io:fwrite("already stopped~n");
 %    {error, Reason} ->
 %      io:fwrite("read error: ~1024p~n", [Reason])
 %  end,
-%  indira_af_unix:close(Sock),
 %  ok.
 %
+% % note that this will be passed as a fun, not as a module handler;
+% % see `gen_indira_command' docs
 %handle_command([{<<"command">>, <<"stop">>}] = _Command) ->
 %  init:stop(),
 %  [{result, ok}];
@@ -48,7 +49,6 @@
 %%%
 %%% @TODO Add more sophisticated command line parsing.
 %%% @TODO Add configuration file.
-%%% @TODO Use open-send-recv-close helper (to be written).
 %%% @end
 %%%---------------------------------------------------------------------------
 

@@ -23,7 +23,7 @@
 % %% exports for escript (controlling command)
 %-export([prepare_stop/0, result_stop/1]).
 %-export([prepare_reload/1, result_reload/1]).
-%-export([prepare_check_running/0, result_check_running/1]).
+%-export([prepare_status/0, prepare_status/1, result_status/1]).
 %
 % %%--------------------------------------------------
 %
@@ -40,14 +40,34 @@
 %    {error, _Reason} -> [{result, error}] % could include the error message
 %  end;
 %
-%handle_command([{<<"command">>, <<"check-running">>}] = _Command, _Arg) ->
-%  case whereis(my_application_sup) of
-%    Pid when is_pid(Pid) -> [{result, true}];
-%    undefined            -> [{result, false}]
-%  end;
+%handle_command([{<<"command">>, <<"status">>}, {<<"wait">>, false}] = _Command,
+%               _Arg) ->
+%  Running = check_running(),
+%  [{running, Running}];
+%handle_command([{<<"command">>, <<"status">>}, {<<"wait">>, true}] = _Command,
+%               _Arg) ->
+%  wait_for_running(),
+%  [{running, true}]; % because we waited for it
 %
 %handle_command(_Command, _Arg) ->
 %  [{error, <<"unrecognized command">>}].
+%
+% %%--------------------------------------------------
+%
+%check_running() ->
+%  % NOTE: you want stronger check, like looking at what my_application_sup's
+%  % children are started, as this is true as soon as the booting started, not
+%  % as it finished
+%  case whereis(my_application_sup) of
+%    Pid when is_pid(Pid) -> true;
+%    undefined -> false
+%  end.
+%
+%wait_for_running() ->
+%  case check_running() of
+%    true -> ok;
+%    false -> timer:sleep(100), wait_for_running()
+%  end.
 %
 % %%--------------------------------------------------
 %
@@ -59,8 +79,11 @@
 %prepare_reload(File) when is_binary(File) ->
 %  [{command, reload}, {file, File}].
 %
-%prepare_check_running() ->
-%  [{<<"command">>, <<"check-running">>}].
+%prepare_status() ->
+%  prepare_status(false).
+%
+%prepare_status(Wait) ->
+%  [{<<"command">>, <<"status">>}, {<<"wait">>, Wait}].
 %
 % %%--------------------------------------------------
 % %% note that these functions die on unexpected reply
@@ -76,10 +99,10 @@
 %result_reload([{result, error}] = _Result) ->
 %  {error, bad_config}.
 %
-%result_check_running([{result, true}] = _Result) ->
-%  true;
-%result_check_running([{result, false}] = _Result) ->
-%  false.
+%result_status([{running, true}] = _Result) ->
+%  running;
+%result_status([{running, false}] = _Result) ->
+%  not_running.
 %'''
 %%%
 %%%   This way, controller script (`escript') can use the functions to talk to
