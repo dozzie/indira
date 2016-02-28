@@ -72,6 +72,7 @@
 -export([chdir/0, chdir/1]).
 -export([setup_logging/2]).
 -export([distributed/1, distributed/2, distributed/3]).
+-export([read_cookie/1, cookie_file/1]).
 -export([distributed_start/0, distributed_stop/0]).
 -export([send_one_command/3, send_one_command/4, retry_send_one_command/4]).
 
@@ -469,18 +470,9 @@ distributed(Name, NameType) ->
   when Cookie :: atom() | string() | binary() | {file, file:filename()}.
 
 distributed(Name, NameType, {file, CookieFile} = _Cookie) ->
-  case file:read_file(CookieFile) of
-    {ok, <<>>} ->
-      {error, no_cookie};
-    {ok, <<"\n", _/binary>>} ->
-      {error, no_cookie};
-    {ok, <<"\r\n", _/binary>>} ->
-      {error, no_cookie};
-    {ok, CookieFileContent} ->
-      [CookieBin | _] = binary:split(CookieFileContent, <<"\n">>),
-      distributed(Name, NameType, CookieBin);
-    {error, Reason} ->
-      {error, Reason}
+  case read_cookie(CookieFile) of
+    {ok, Cookie} -> distributed(Name, NameType, Cookie);
+    {error, Reason} -> {error, Reason}
   end;
 
 distributed(Name, NameType, Cookie) when is_list(Cookie) ->
@@ -494,6 +486,42 @@ distributed(Name, NameType, Cookie) when is_atom(Cookie) ->
     shortnames -> ok = set_option(indira, net, {Name, NameType, Cookie});
     longnames  -> ok = set_option(indira, net, {Name, NameType, Cookie});
     _ -> {error, badarg}
+  end.
+
+%% @doc Set Erlang cookie to the content of specified file.
+%%   The file has the same format as for `distributed(Node, _, {file,
+%%   CookieFile})'.
+%%
+%%   This function is intended for use with `-s' or `-run' options in command
+%%   line, e.g.
+%```
+%erl -sname shell -run indira cookie_file /etc/daemon/cookie.txt
+%'''
+
+-spec cookie_file(Args :: [file:filename()]) ->
+  ok.
+
+cookie_file([Filename]) ->
+  {ok, Cookie} = read_cookie(Filename),
+  erlang:set_cookie(node(), Cookie),
+  ok.
+
+%% @doc Read Erlang cookie from specified file.
+%%   The file has the same format as for `distributed(Node, _, {file,
+%%   CookieFile})'.
+
+-spec read_cookie(file:filename()) ->
+  {ok, atom()} | {error, no_cookie | term()}.
+
+read_cookie(Filename) ->
+  case file:read_file(Filename) of
+    {ok, Content} ->
+      case binary:split(Content, <<"\n">>) of
+        [<<>>   | _] -> {error, no_cookie};
+        [Cookie | _] -> {ok, binary_to_atom(Cookie, utf8)}
+      end;
+    {error, Reason} ->
+      {error, Reason}
   end.
 
 %% @doc Start Erlang networking, as configured through {@link distributed/3}.
