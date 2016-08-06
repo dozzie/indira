@@ -144,9 +144,6 @@
 
 -behaviour(gen_server).
 
-%% behaviour description (pre-R15)
--export([behaviour_info/1]).
-
 %% public API
 -export([start_link/3, supervisor/3]).
 
@@ -209,15 +206,20 @@
 -type listener_module() :: atom().
 
 %%%---------------------------------------------------------------------------
-%%% behaviour description
-%%%---------------------------------------------------------------------------
 
-%% @doc Behaviour description.
+-callback listen(Address :: listen_address()) ->
+  {ok, listen_socket()} | ignore | {error, term()}.
 
-behaviour_info(callbacks = _Item) ->
-  [{listen, 1}, {accept, 1}, {close, 1}, {controlling_process, 2}];
-behaviour_info(_Item) ->
-  undefined.
+-callback accept(Socket :: listen_socket()) ->
+    {ok, connection(), listen_socket()}
+  | {ok, listen_socket()}
+  | {stop, Reason :: term(), listen_socket()}.
+
+-callback close(Socket :: connection() | listen_socket()) ->
+  any().
+
+-callback controlling_process(Socket :: connection(), Pid :: pid()) ->
+  ok | {error, term()}.
 
 %%%---------------------------------------------------------------------------
 %%% public API
