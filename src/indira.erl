@@ -84,7 +84,7 @@
 -export([start/0]).
 
 %% API for escript
--export([set_option/3, args_foldg/3, args_folds/3, set_env/4]).
+-export([set_option/3, args_foldg/3, args_folds/3, set_env/3, set_env/4]).
 -export([sleep_forever/0]).
 -export([start_rec/1, start_rec/2]).
 -export([write_pidfile/1]).
@@ -227,6 +227,17 @@ args_foldg(Fun, Acc, AccList) ->
 
 args_folds(Fun, Acc, AccList) ->
   indira_opts:folds(Fun, Acc, AccList).
+
+%% @doc Populate application environment with config loaded from file, using
+%%   {@link indira_opts:set_env/3}.
+%%
+%% @see indira_opts:set_env/3
+
+-spec set_env(fun(), term(), [tuple()]) ->
+  ok | {error, term()}.
+
+set_env(Validate, Config, SetSpecs) ->
+  indira_opts:set_env(Validate, Config, SetSpecs).
 
 %% @doc Populate application environment with config loaded from file, using
 %%   {@link indira_opts:set_env/4}.

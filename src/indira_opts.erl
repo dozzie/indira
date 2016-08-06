@@ -15,7 +15,7 @@
 %% command line arguments parsing
 -export([foldg/3, folds/3]).
 %% propagating config over application environment
--export([set_env/4]).
+-export([set_env/3, set_env/4]).
 
 %%%---------------------------------------------------------------------------
 %%% data types {{{
@@ -287,6 +287,15 @@ set_env(ConfigGet, Validate, Config, SetSpecs) ->
     ok -> set_env_loop(ConfigGet, Validate, Config, SetSpecs);
     {error, Reason} -> {error, Reason}
   end.
+
+%% @doc Set application environment from config according to specification.
+%%
+%%   Simplified version of {@link set_env/4}, with `ConfigGet' set to {@link
+%%   proplists:get_value/2}. This requires `Config' to be a proplist,
+%%   obviously.
+
+set_env(Validate, Config, SetSpecs) ->
+  set_env(fun proplists:get_value/2, Validate, Config, SetSpecs).
 
 %%----------------------------------------------------------
 %% set_env_loop() {{{
