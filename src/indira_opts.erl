@@ -90,13 +90,13 @@
 %%   Anything else than `{take, N, _}' or `{error, _}' is considered to be
 %%   a new accumulator. The same can be achieved by returning `{take, 1, _}'.
 %%
-%%   If `Fun' is two-argument function, simple iteration over arguments list
-%%   takes place.
+%%   If `Fun' is two-argument function, iteration over arguments list has no
+%%   modifications to it.
 %%
 %%   If `Fun' is three-argument, each `"--foo=XXX"' argument is
 %%   split on the first `"="' character and the right side of the split
 %%   (`"XXX"') is inserted into arguments list just after the raw option
-%%   `"--foo"', so it becames `["--foo", "XXX", RestArgs ...]'. To notify that
+%%   `"--foo"', so it becames `["--foo", "XXX", RestArgs ...]'. To signal that
 %%   this operation was done, `Fun(split, ArgList, Acc)' is called. Obviously,
 %%   if split was <em>not done</em>, `Fun(simple, ArgList, Acc)' is called.
 %%
@@ -194,11 +194,12 @@ foldg_split_value(Fun, Acc, [Arg | _] = ArgList) ->
 
 %% @doc Simple fold over command line arguments.
 %%
-%%   Function `Fun' is called with only a single command line argument. If the
-%%   function returns `{need, N}', it will be immediately called with a list
-%%   of `N+1' arguments (current and the next `N'), (unless the list of
-%%   remaining arguments is shorter than `N', in which case the whole
-%%   iteration is terminated with `{error, {Arg, not_enough_args}}' result).
+%%   Function `Fun' is called with only a single command line argument at
+%%   a time. If the function returns `{need, N}', it will be immediately
+%%   called with a list of `N+1' arguments (current and the next `N'), (unless
+%%   the list of remaining arguments is shorter than `N', in which case the
+%%   whole iteration is terminated with `{error, {Arg, not_enough_args}}'
+%%   result).
 %%
 %%   As with {@link foldg/3}, `Fun' returning `{error, Reason}' terminates the
 %%   iteration with result of `{error, {Arg, Reason}}' (on the call after
@@ -246,10 +247,30 @@ folds_second_call(Fun, Acc, N, Opt, ArgList) ->
 %%%---------------------------------------------------------------------------
 
 %% @doc Set application environment from config according to specification.
+%%
+%%   `Config' is a configuration structure, possibly loaded
+%%   from a file (e.g. a proplist).
+%%
+%%   `ConfigGet' is a function that extracts a single configuration value from
+%%   the structure (e.g. {@link proplists:get_value/2}); it's called as
+%%   `ConfigGet(Key, Config)', `Key' being a part of set spec.
+%%
+%%   `Validate' takes the value returned by `ConfigGet(...)', checks it for
+%%   correctness and possibly converts to an appropriate type (e.g. from
+%%   {@type binary()} to {@type @{inet:hostname(), inet:port_number()@}}).
+%%   It's called as `Validate(Key, EnvKey, Value)', `Key' and `EnvKey' being
+%%   parts of set spec and `Value' being a value returned by `ConfigGet()'.
+%%
+%%   `SetSpecs' is a list of tuples describing what value from config to use
+%%   to set what application's environment. Single specification takes form of
+%%   `{Key, EnvKey, SetOpts}' or `{Key, EnvKey}'. `Key' is what is passed to
+%%   `ConfigGet()' along with configuration. `EnvKey' is a pair of two atoms,
+%%   `{Application,Par}', which are used with {@link application:get_env/2}
+%%   and {@link application:set_env/3}.
+%%
 %%   Function pre-loads all the (potentially) necessary applications.
 %%
-%%   If validation function (called as `Validate(Key, EnvKey, Value)') returns
-%%   `{error, Reason}', it will be reported as
+%%   If `Validate(...)' returns `{error, Reason}', it will be reported as
 %%   `{error, {Key, EnvKey, Reason}}'.
 
 -spec set_env(ConfigGet, Validate, config(), [set_spec()]) ->

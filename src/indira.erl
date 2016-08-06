@@ -12,21 +12,40 @@
 %%%
 %%%   == Indira configuration ==
 %%%
-%%%   Indira uses several configuration keys ({@link application:get_env/2}),
-%%%   of which two are most important: <i>listen</i> and <i>command</i>
-%%%   (there's also <i>net_start</i>, used for starting distributed Erlang;
-%%%   see {@link distributed/3} for details).
+%%%   Indira uses following configuration keys ({@link application:get_env/2}):
 %%%
-%%%   The value of <i>command</i> is a module name (with an arbitrary
-%%%   parameter) that implements {@link gen_indira_command} behaviour. It can
-%%%   also be a function, but this way is not recommended. See {@link
-%%%   gen_indira_command} for details.
-%%%
-%%%   The value of <i>listen</i> is a list of pairs `{Mod,Args}'. `Mod' is
-%%%   a name (atom) of module which is considered to be listener's entry
-%%%   point. `Args' is an argument passed to `Mod:child_spec/2'. All listeners
-%%%   must start successfully (this may became configurable in the future).
-%%%   For more details see {@link gen_indira_listener}.
+%%%   <ul>
+%%%     <li>
+%%%       <i>listen</i> ({@type [@{Mod :: module(), Args :: term()@}]}) --
+%%%       a list of administrative sockets addresses, each having form of
+%%%       `{Module, Args}', where `Module' implements {@link
+%%%       gen_indira_listener} and `Args' describes socket's address; see
+%%%       {@link indira_unix}, {@link indira_tcp}, and {@link indira_udp}
+%%%     </li>
+%%%     <li>
+%%%       <i>command</i> ({@type @{Module :: module(), Args :: term()@} |
+%%%       fun() | @{fun(), term()@}}) -- command handler module, where
+%%%       `Module' implements {@link gen_indira_command} behaviour and `Args'
+%%%       is its additional configuration, if one is necessary; it can also be
+%%%       a one-argument function or a pair of a two-argument function and
+%%%       a term (`{fun(), Arg}'), but this is not recommended
+%%%     </li>
+%%%     <li>
+%%%       <i>pidfile</i> ({@type file:filename()}) -- path to a pidfile to
+%%%       write at start and delete on shutdown (may be left unset)
+%%%     </li>
+%%%     <li>
+%%%       <i>net</i> ({@type @{Node :: atom(), NameType :: shortnames |
+%%%       longnames, Cookie :: atom() | none@}}) -- distributed Erlang
+%%%       network configuration; see {@link distributed/3} for details
+%%%     </li>
+%%%     <li>
+%%%       <i>net_start</i> ({@type boolean()}; default: `false') -- whether to
+%%%       configure Erlang networking according to <i>net</i> setting at
+%%%       Indira's start or delay it; networking can be started and stopped
+%%%       using {@link distributed_start/0} and {@link distributed_stop/0}
+%%%     </li>
+%%%   </ul>
 %%%
 %%%   A file passed to <i>-config</i> VM option could look like this:
 %```
@@ -463,11 +482,12 @@ distributed(Name, NameType) ->
 %%   `application:set_env(indira, net_start, true)'.
 %%
 %%   When providing cookie in the form of `{file,Path}', only the first line
-%%   (with `"\n"' stripped) will be used as cookie.
+%%   (with `"\n"' stripped) will be used as cookie. If the cookie is set to
+%%   `none', the default one (`~/.erlang.cookie') will be used.
 
 -spec distributed(node(), shortnames | longnames, Cookie) ->
   ok | {error, term()}
-  when Cookie :: atom() | string() | binary() | {file, file:filename()}.
+  when Cookie :: none | atom() | string() | binary() | {file, file:filename()}.
 
 distributed(Name, NameType, {file, CookieFile} = _Cookie) ->
   case read_cookie(CookieFile) of
