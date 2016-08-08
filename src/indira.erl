@@ -95,7 +95,7 @@
 -export([read_cookie/1, cookie_file/1]).
 -export([distributed_start/0, distributed_stop/0]).
 -export([send_one_command/3, send_one_command/4, retry_send_one_command/4]).
--export([execute/3, daemonize/5, daemonize/2]).
+-export([execute/3, daemonize/2]).
 
 -export_type([event_filter_fun/0, log_destination/0]).
 
@@ -665,43 +665,24 @@ execute(Args, CLIHandler, Defaults) ->
 
 %% @doc Start the main application of the daemon.
 %%
-%% Function intended to be used in {@link gen_indira_cli} module, in
-%% `handle_command(start)' call.
+%% Function sets all Indira's parameters specified in options (options
+%% `{listen, [...]}' and `{command, {Mod,Args}}' are mandatory), and then
+%% starts Indira and `App', in this order.
 %%
-%% Function sets <i>indira/listen</i>, <i>indira/pidfile</i>, and
-%% <i>indira/net</i>, then calls {@link daemonize/2}.
-%%
-%% Function never returns, causing the calling process to sleep forever.
-%%
-%% @see gen_indira_command
-
--spec daemonize(atom(), {module(), term()}, [{module(), term()}],
-                file:filename() | undefined, tuple() | undefined) ->
-  no_return() | {error, term()}.
-
-daemonize(App, CommModArgs, ListenSpecs, PidFile, NetConfig) ->
-  gen_indira_cli:daemonize(App, CommModArgs, ListenSpecs, PidFile, NetConfig).
-
-%% @doc Start the main application of the daemon.
-%%
-%% Function intended to be used in {@link gen_indira_cli} module, in
-%% `handle_command(start)' call.
-%%
-%% `CommModArgs = {CommMod, Args}' specifies a {@link gen_indira_command}
-%% module and a hint argument to it.
+%% NOTE: Setting an option to `undefined' has the same result as omitting it
+%% altogether.
 %%
 %% Function never returns, causing the calling process to sleep forever.
 %%
-%% Before running this function caller needs to set <i>indira/listen</i>
-%% environment variable ({@link application:set_env/3}).
+%% @TODO Describe returned errors in more detail.
 %%
-%% @see gen_indira_command
+%% @see gen_indira_cli:daemonize/2
 
--spec daemonize(atom(), {module(), term()}) ->
+-spec daemonize(atom(), [gen_indira_cli:daemon_option()]) ->
   no_return() | {error, term()}.
 
-daemonize(App, CommModArgs) ->
-  gen_indira_cli:daemonize(App, CommModArgs).
+daemonize(Application, IndiraOptions) ->
+  gen_indira_cli:daemonize(Application, IndiraOptions).
 
 %% }}}
 %%----------------------------------------------------------

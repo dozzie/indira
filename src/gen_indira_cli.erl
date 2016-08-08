@@ -63,13 +63,13 @@
 %...
 %
 %handle_command(start = _Command, Options) ->
-%  PidFile = get_pidfile(Options),
 %  AdminSocket = get_admin_socket(Options),
-%  NetConfig = get_net_config(Options),
 %  case configure_application(Options) of
 %    ok ->
-%      indira:daemonize(example_app, {example_command_handler, []},
-%                       [{indira_unix, AdminSocket}], PidFile, NetConfig);
+%      indira:daemonize(example_app, [
+%        {listen, [{indira_unix, AdminSocket}]},
+%        {command, {example_command_handler, []}}
+%      ]);
 %    {error, Reason} ->
 %      {error, Reason}
 %  end.
@@ -154,6 +154,8 @@
 %%%     </li>
 %%%   </ul>
 %%%
+%%% @TODO Add {@type daemon_option()} to start other applications before daemon.
+%%%
 %%% @see gen_indira_command
 %%% @see indira:execute/3
 %%% @see indira:daemonize/2
@@ -163,9 +165,10 @@
 
 -module(gen_indira_cli).
 
--export([execute/3, daemonize/5, daemonize/2]).
+-export([execute/3, daemonize/2]).
 
 -export_type([command/0, options/0, request/0, reply/0, socket_address/0]).
+-export_type([daemon_option/0]).
 
 %%%---------------------------------------------------------------------------
 %%% types {{{
@@ -188,6 +191,18 @@
 -type socket_address() :: {module(), term()}.
 %% A {@link gen_indira_listener} module and an address description for it (to
 %% use with `send_one_line()' and `retry_send_one_line()').
+
+-type daemon_option() ::
+    {listen, [{module(), term()}]}
+  | {command, {module(), term()}}
+  | {pidfile, file:filename() | undefined}
+  | {node_name, node() | undefined}
+  | {name_type, shortnames | longnames | undefined}
+  | {cookie, none | undefined | atom() | {file, file:filename()}}
+  | {net_start, boolean() | undefined}.
+%% Options that correspond to Indira's environment. `node_name', `name_type',
+%% and `cookie' compose <i>indira/net</i> parameter. See {@link indira} for
+%% details.
 
 %%% }}}
 %%%---------------------------------------------------------------------------
@@ -273,58 +288,160 @@ send_command(CLIHandler, Command, Options, {SockMod, SockAddr} = _Address) ->
 
 %% @doc Start the main application of the daemon.
 %%
-%% Function never returns, causing the calling process to sleep forever.
+%% Function sets all Indira's parameters specified in options (options
+%% `{listen, [...]}' and `{command, {Mod,Args}}' are mandatory), and then
+%% starts Indira and `App', in this order.
 %%
-%% Function also starts Indira with administrative command handler.
-%%
-%% Before running this function caller needs to set <i>indira/listen</i>
-%% environment variable ({@link application:set_env/3}).
-
--spec daemonize(atom(), {module(), term()}) ->
-  no_return() | {error, term()}.
-
-daemonize(App, {CommMod, Args} = _CommModArgs) ->
-  indira:set_option(indira, command, {CommMod, Args}),
-  % TODO: handle errors
-  ok = indira:start_rec(indira),
-  ok = indira:start_rec(App),
-  indira:sleep_forever(). % never return
-
-%% @doc Start the main application of the daemon.
-%%
-%% Function sets <i>indira/listen</i>, <i>indira/pidfile</i>, and
-%% <i>indira/net</i>, then calls {@link daemonize/2}.
+%% NOTE: Setting an option to `undefined' has the same result as omitting it
+%% altogether.
 %%
 %% Function never returns, causing the calling process to sleep forever.
 
--spec daemonize(atom(), {module(), term()}, [{module(), term()}],
-                file:filename() | undefined, tuple() | undefined) ->
-  no_return() | {error, term()}.
+-spec daemonize(atom(), [daemon_option()]) ->
+  no_return() | {error, Reason}
+  when Reason :: invalid_listen_spec | missing_listen_spec
+               | invalid_command_handler | missing_command_handler
+               | invalid_pidfile
+               | invalid_net_config | invalid_net_start.
 
-daemonize(App, CommModArgs, ListenSpecs, PidFile, NetConfig) ->
-  set_listen_specs(ListenSpecs),
-  set_pidfile(PidFile),
-  set_netconfig(NetConfig),
-  daemonize(App, CommModArgs).
+daemonize(App, Options) ->
+  case set_indira_options(Options) of
+    ok ->
+      % TODO: handle errors
+      ok = indira:start_rec(indira),
+      ok = indira:start_rec(App),
+      indira:sleep_forever(); % never return
+    {error, Reason} ->
+      {error, Reason}
+  end.
 
-%% @doc Set <i>indira/listen</i> option.
+%%----------------------------------------------------------
+%% validate and set Indira options {{{
 
-set_listen_specs(ListenSpecs) ->
-  indira:set_option(indira, listen, ListenSpecs).
-
-%% @doc Set <i>indira/pidfile</i> option.
-
-set_pidfile(undefined = _PidFile) ->
-  ok;
-set_pidfile(PidFile) ->
-  indira:set_option(indira, pidfile, PidFile).
-
-%% @doc Set <i>indira/net</i> option.
+%% @doc Set Indira application's environment parameters.
 %%
-%% @todo This is a placeholder that needs implementing.
+%% Function ensures that all required options (`listen' and `command') are
+%% present.
 
-set_netconfig(_NetConfig) ->
-  'TODO'.
+-spec set_indira_options([daemon_option()]) ->
+  ok | {error, Reason}
+  when Reason :: invalid_listen_spec | missing_listen_spec
+               | invalid_command_handler | missing_command_handler
+               | invalid_pidfile
+               | invalid_net_config | invalid_net_start.
+
+set_indira_options(Options) ->
+  application:load(indira), % TODO: handle error
+  set_indira_options([listen, command, pidfile, net, net_start], Options).
+
+%% @doc Workhorse for {@link set_indira_options/1}.
+
+-spec set_indira_options([atom()], [daemon_option()]) ->
+  ok | {error, Reason}
+  when Reason :: invalid_listen_spec | missing_listen_spec
+               | invalid_command_handler | missing_command_handler
+               | invalid_pidfile
+               | invalid_net_config | invalid_net_start.
+
+set_indira_options([listen | Rest] = _Aspects, Options) ->
+  ListenSpecs = proplists:get_value(listen, Options, []),
+  case check_listen_specs(ListenSpecs) of
+    ok ->
+      application:set_env(indira, listen, ListenSpecs),
+      set_indira_options(Rest, Options);
+    {error, Reason} ->
+      {error, Reason}
+  end;
+set_indira_options([command | Rest] = _Aspects, Options) ->
+  case proplists:get_value(command, Options) of
+    {Mod, _Args} = CommandHandler when is_atom(Mod) ->
+      application:set_env(indira, command, CommandHandler),
+      set_indira_options(Rest, Options);
+    undefined ->
+      {error, missing_command_handler};
+    _ ->
+      {error, invalid_command_handler}
+  end;
+set_indira_options([pidfile | Rest] = _Aspects, Options) ->
+  case proplists:get_value(pidfile, Options) of
+    PidFile when is_list(PidFile) orelse is_binary(PidFile) ->
+      application:set_env(indira, pidfile, PidFile),
+      set_indira_options(Rest, Options);
+    undefined ->
+      set_indira_options(Rest, Options);
+    _ ->
+      {error, invalid_pidfile}
+  end;
+set_indira_options([net | Rest] = _Aspects, Options) ->
+  NodeName = proplists:get_value(node_name, Options),
+  NameType = proplists:get_value(name_type, Options),
+  Cookie = proplists:get_value(cookie, Options, none),
+  case check_net_config(NodeName, NameType, Cookie) of
+    ok ->
+      application:set_env(indira, net, {NodeName, NameType, Cookie}),
+      set_indira_options(Rest, Options);
+    skip ->
+      set_indira_options(Rest, Options);
+    {error, Reason} ->
+      {error, Reason}
+  end;
+set_indira_options([net_start | Rest] = _Aspects, Options) ->
+  case proplists:get_value(net_start, Options) of
+    NetStart when is_boolean(NetStart) ->
+      application:set_env(indira, net_start, NetStart),
+      set_indira_options(Rest, Options);
+    undefined ->
+      set_indira_options(Rest, Options);
+    _ ->
+      {error, invalid_net_start}
+  end;
+set_indira_options([] = _Aspects, _Options) ->
+  ok.
+
+%% @doc Verify correctness of listener specifications.
+
+-spec check_listen_specs(term()) ->
+  ok | {error, invalid_listen_spec | missing_listen_spec}.
+
+check_listen_specs([_|_] = Specs) ->
+  case lists:all(fun ({M,_}) -> is_atom(M); (_) -> false end, Specs) of
+    true -> ok;
+    false -> {error, invalid_listen_spec}
+  end;
+check_listen_specs([] = _Specs) ->
+  {error, missing_listen_spec};
+check_listen_specs(_Specs) ->
+  {error, invalid_listen_spec}.
+
+%% @doc Verify correctness of option values for Erlang networking.
+
+-spec check_net_config(term(), term(), term()) ->
+  ok | skip | {error, invalid_net_config}.
+
+check_net_config(undefined = _NodeName, _NameType, _Cookie) ->
+  skip;
+check_net_config(_NodeName, undefined = _NameType, _Cookie) ->
+  skip;
+check_net_config(NodeName, NameType, undefined = _Cookie) ->
+  check_net_config(NodeName, NameType, none);
+check_net_config(NodeName, NameType, Cookie)
+when (NameType == shortnames orelse NameType == longnames),
+     is_atom(NodeName) ->
+  case Cookie of
+    %none -> % covered by `is_atom(Cookie)'
+    %  ok;
+    _ when is_atom(Cookie) ->
+      ok;
+    {file, CookieFile} when is_list(CookieFile) orelse is_binary(CookieFile) ->
+      ok;
+    _ ->
+      {error, invalid_net_config}
+  end;
+check_net_config(_NodeName, _NameType, _Cookie) ->
+  {error, invalid_net_config}.
+
+%% }}}
+%%----------------------------------------------------------
 
 %%%---------------------------------------------------------------------------
 %%% vim:ft=erlang:foldmethod=marker
