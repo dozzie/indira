@@ -199,10 +199,13 @@
   | {node_name, node() | undefined}
   | {name_type, shortnames | longnames | undefined}
   | {cookie, none | undefined | atom() | {file, file:filename()}}
-  | {net_start, boolean() | undefined}.
+  | {net_start, boolean() | undefined}
+  | {start_before, AppName :: atom()}
+  | {start_after, AppName :: atom()}.
 %% Options that correspond to Indira's environment. `node_name', `name_type',
 %% and `cookie' compose <i>indira/net</i> parameter. See {@link indira} for
-%% details.
+%% details. `{start_*, AppName}' allow to start additional applications (e.g.
+%% SASL) before or after Indira.
 
 %%% }}}
 %%%---------------------------------------------------------------------------
@@ -306,15 +309,34 @@ send_command(CLIHandler, Command, Options, {SockMod, SockAddr} = _Address) ->
 
 daemonize(App, Options) ->
   case set_indira_options(Options) of
-    ok ->
+    {ok, StartBefore, StartAfter} ->
       % TODO: handle errors
+      ok = start_all_applications(StartBefore),
       ok = indira:start_rec(indira),
+      ok = start_all_applications(StartAfter),
       ok = indira:start_rec(App),
       indira:sleep_forever(); % never return
     {error, Reason} ->
       {error, Reason}
   end.
 
+%%----------------------------------------------------------
+%% start a list of applications {{{
+
+%% @doc Start all the specified applications.
+
+-spec start_all_applications([atom()]) ->
+  ok | {error, {App :: atom(), Reason :: term()}}.
+
+start_all_applications([] = _Apps) ->
+  ok;
+start_all_applications([App | Rest] = _Apps) ->
+  case indira:start_rec(App) of
+    ok -> start_all_applications(Rest);
+    {error, Reason} -> {error, {App, Reason}}
+  end.
+
+%% }}}
 %%----------------------------------------------------------
 %% validate and set Indira options {{{
 
@@ -324,7 +346,8 @@ daemonize(App, Options) ->
 %% present.
 
 -spec set_indira_options([daemon_option()]) ->
-  ok | {error, Reason}
+    {ok, StartBefore :: [atom()], StartAfter :: [atom()]}
+  | {error, Reason}
   when Reason :: invalid_listen_spec | missing_listen_spec
                | invalid_command_handler | missing_command_handler
                | invalid_pidfile
@@ -337,7 +360,8 @@ set_indira_options(Options) ->
 %% @doc Workhorse for {@link set_indira_options/1}.
 
 -spec set_indira_options([atom()], [daemon_option()]) ->
-  ok | {error, Reason}
+    {ok, StartBefore :: [atom()], StartAfter :: [atom()]}
+  | {error, Reason}
   when Reason :: invalid_listen_spec | missing_listen_spec
                | invalid_command_handler | missing_command_handler
                | invalid_pidfile
@@ -395,8 +419,10 @@ set_indira_options([net_start | Rest] = _Aspects, Options) ->
     _ ->
       {error, invalid_net_start}
   end;
-set_indira_options([] = _Aspects, _Options) ->
-  ok.
+set_indira_options([] = _Aspects, Options) ->
+  StartBefore = proplists:get_all_values(start_before, Options),
+  StartAfter  = proplists:get_all_values(start_after,  Options),
+  {ok, StartBefore, StartAfter}.
 
 %% @doc Verify correctness of listener specifications.
 
