@@ -588,7 +588,8 @@ distributed_stop() ->
 %%   that module.
 
 -spec send_one_command(module(), term(), indira_json:struct()) ->
-  {ok, indira_json:struct()} | {error, badarg | bad_reply | term()}.
+  {ok, indira_json:struct()} | {error, Reason}
+when Reason :: bad_request_format | bad_reply_format | term().
 
 send_one_command(Module, Address, Command) ->
   send_one_command(Module, Address, Command, infinity).
@@ -600,7 +601,8 @@ send_one_command(Module, Address, Command) ->
 %%   that module.
 
 -spec send_one_command(module(), term(), indira_json:struct(), timeout()) ->
-  {ok, indira_json:struct()} | {error, badarg | bad_reply | term()}.
+  {ok, indira_json:struct()} | {error, Reason}
+when Reason :: bad_request_format | bad_reply_format | term().
 
 send_one_command(Module, Address, Command, Timeout) ->
   case indira_json:encode(Command) of
@@ -611,13 +613,13 @@ send_one_command(Module, Address, Command, Timeout) ->
             {ok, Reply} ->
               {ok, Reply};
             {error, badarg} ->
-              {error, bad_reply}
+              {error, bad_reply_format}
           end;
         {error, Reason} ->
           {error, Reason}
       end;
     {error, badarg} ->
-      {error, badarg}
+      {error, bad_request_format}
   end.
 
 %% @doc Open a connection to daemon's Indira, send a command, receive a reply;
@@ -629,7 +631,8 @@ send_one_command(Module, Address, Command, Timeout) ->
 
 -spec retry_send_one_command(module(), term(), indira_json:struct(),
                              timeout()) ->
-  {ok, indira_json:struct()} | {error, badarg | bad_reply | term()}.
+  {ok, indira_json:struct()} | {error, Reason}
+when Reason :: bad_request_format | bad_reply_format | term().
 
 retry_send_one_command(Module, Address, Command, Timeout) ->
   case indira_json:encode(Command) of
@@ -640,13 +643,13 @@ retry_send_one_command(Module, Address, Command, Timeout) ->
             {ok, Reply} ->
               {ok, Reply};
             {error, badarg} ->
-              {error, bad_reply}
+              {error, bad_reply_format}
           end;
         {error, Reason} ->
           {error, Reason}
       end;
     {error, badarg} ->
-      {error, badarg}
+      {error, bad_request_format}
   end.
 
 %% }}}

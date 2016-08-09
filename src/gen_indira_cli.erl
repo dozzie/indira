@@ -264,9 +264,7 @@ execute_command(CLIHandler, Command, Options) ->
 
 -spec send_command(module(), command(), options(), socket_address()) ->
   ok | {error, Reason}
-when Reason :: bad_request_format
-             | bad_reply_format
-             | {send, term()}
+when Reason :: {send, bad_request_format | bad_reply_format | term()}
              | {format, term()}.
 
 send_command(CLIHandler, Command, Options, {SockMod, SockAddr} = _Address) ->
@@ -275,10 +273,6 @@ send_command(CLIHandler, Command, Options, {SockMod, SockAddr} = _Address) ->
       case indira:send_one_command(SockMod, SockAddr, Request) of
         {ok, Reply} ->
           CLIHandler:handle_reply(Reply, Command, Options);
-        {error, badarg} ->
-          {error, bad_request_format};
-        {error, bad_reply} ->
-          {error, bad_reply_format};
         {error, Reason} ->
           {error, {send, Reason}}
       end;

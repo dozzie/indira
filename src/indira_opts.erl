@@ -274,7 +274,7 @@ folds_second_call(Fun, Acc, N, Opt, ArgList) ->
 %%   `{error, {Key, EnvKey, Reason}}'.
 
 -spec set_env(ConfigGet, Validate, config(), [set_spec()]) ->
-  ok | {error, {config_key(), env_key(), term()} | term()}
+  ok | {error, {config_key(), env_key(), term()} | {app_load, term()}}
   when
     ConfigGet :: fun((config_key(), config()) ->
                        config_value()),
@@ -285,7 +285,7 @@ folds_second_call(Fun, Acc, N, Opt, ArgList) ->
 set_env(ConfigGet, Validate, Config, SetSpecs) ->
   case load_apps(SetSpecs) of
     ok -> set_env_loop(ConfigGet, Validate, Config, SetSpecs);
-    {error, Reason} -> {error, Reason}
+    {error, Reason} -> {error, {app_load, Reason}}
   end.
 
 %% @doc Set application environment from config according to specification.
