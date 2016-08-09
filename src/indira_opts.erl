@@ -84,7 +84,7 @@
 %%   leading elements skipped.
 %%
 %%   If `Fun' returns `{error, Reason}', whole iteration is terminated and
-%%   `{error, {Arg, Reason}}' is returned to the caller, with `Arg' being the
+%%   `{error, {Reason, Arg}}' is returned to the caller, with `Arg' being the
 %%   argument at which the error occurred.
 %%
 %%   Anything else than `{take, N, _}' or `{error, _}' is considered to be
@@ -101,13 +101,13 @@
 %%   if split was <em>not done</em>, `Fun(simple, ArgList, Acc)' is called.
 %%
 %%   If `Fun(split, _, Acc)' doesn't return `{take, N, NewAcc}', it results in
-%%   an error (`{error, {Arg, excessive_value}}'). However, `Fun' can decide
+%%   an error (`{error, {excessive_value, Arg}}'). However, `Fun' can decide
 %%   it is OK to only consume option and leave its argument in the argument
 %%   list by returning `{take, 1, _}'.
 
 -spec foldg(foldg_fun_simple() | foldg_fun_split(), accumulator(),
             [argument()]) ->
-  {ok, accumulator()} | {error, {argument(), FoldError | term()}}
+  {ok, accumulator()} | {error, {FoldError | term(), argument()}}
   when FoldError :: excessive_value.
 
 foldg(Fun, Acc, ArgList) when is_function(Fun, 2) ->
@@ -129,7 +129,7 @@ foldg_simple(Fun, Acc, [Arg | RestArgs] = ArgList) ->
     {take, N, NewAcc} when is_integer(N), N > 0 ->
       foldg_simple(Fun, NewAcc, lists:nthtail(N, ArgList));
     {error, Reason} ->
-      {error, {Arg, Reason}};
+      {error, {Reason, Arg}};
     % everything else is a new accumulator
     NewAcc ->
       foldg_simple(Fun, NewAcc, RestArgs)
@@ -165,7 +165,7 @@ foldg_split_no_value(Fun, Acc, [Arg | RestArgs] = ArgList) ->
     {take, N, NewAcc} when is_integer(N), N > 0 ->
       foldg_split(Fun, NewAcc, lists:nthtail(N, ArgList));
     {error, Reason} ->
-      {error, {Arg, Reason}};
+      {error, {Reason, Arg}};
     NewAcc ->
       foldg_split(Fun, NewAcc, RestArgs)
   end.
@@ -182,11 +182,11 @@ foldg_split_value(Fun, Acc, [Arg | _] = ArgList) ->
     {take, N, NewAcc} when is_integer(N), N > 0 ->
       foldg_split(Fun, NewAcc, lists:nthtail(N, ArgList));
     {error, Reason} ->
-      {error, {Arg, Reason}};
+      {error, {Reason, Arg}};
     % it is an error to only consume one argument, when in fact it was just
     % a half of the original argument
     _NewAcc ->
-      {error, {Arg, excessive_value}}
+      {error, {excessive_value, Arg}}
   end.
 
 %% }}}
@@ -198,15 +198,15 @@ foldg_split_value(Fun, Acc, [Arg | _] = ArgList) ->
 %%   a time. If the function returns `{need, N}', it will be immediately
 %%   called with a list of `N+1' arguments (current and the next `N'), (unless
 %%   the list of remaining arguments is shorter than `N', in which case the
-%%   whole iteration is terminated with `{error, {Arg, not_enough_args}}'
+%%   whole iteration is terminated with `{error, {not_enough_args, Arg}}'
 %%   result).
 %%
 %%   As with {@link foldg/3}, `Fun' returning `{error, Reason}' terminates the
-%%   iteration with result of `{error, {Arg, Reason}}' (on the call after
+%%   iteration with result of `{error, {Reason, Arg}}' (on the call after
 %%   `{need, N}', only the first element of the list is used).
 
 -spec folds(folds_fun(), accumulator(), [argument()]) ->
-  {ok, accumulator()} | {error, {argument(), FoldError | term()}}
+  {ok, accumulator()} | {error, {FoldError | term(), argument()}}
   when FoldError :: not_enough_args.
 
 folds(_Fun, Acc, [] = _ArgList) ->
@@ -216,7 +216,7 @@ folds(Fun, Acc, [Arg | RestArgs] = _ArgList) ->
     {need, N} when is_integer(N), N > 0 ->
       folds_second_call(Fun, Acc, N, Arg, RestArgs);
     {error, Reason} ->
-      {error, {Arg, Reason}};
+      {error, {Reason, Arg}};
     % everything else is a new accumulator
     NewAcc ->
       folds(Fun, NewAcc, RestArgs)
@@ -232,11 +232,11 @@ folds_second_call(Fun, Acc, N, Opt, ArgList) ->
   case listsplit(ArgList, N) of
     {OptArgs, RestArgs} ->
       case Fun([Opt | OptArgs], Acc) of
-        {error, Reason} -> {error, {Opt, Reason}};
+        {error, Reason} -> {error, {Reason, Opt}};
         NewAcc -> folds(Fun, NewAcc, RestArgs)
       end;
     error ->
-      {error, {Opt, not_enough_args}}
+      {error, {not_enough_args, Opt}}
   end.
 
 %% }}}
