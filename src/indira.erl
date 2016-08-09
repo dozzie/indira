@@ -589,7 +589,7 @@ distributed_stop() ->
 
 -spec send_one_command(module(), term(), indira_json:struct()) ->
   {ok, indira_json:struct()} | {error, Reason}
-when Reason :: bad_request_format | bad_reply_format | term().
+  when Reason :: bad_request_format | bad_reply_format | term().
 
 send_one_command(Module, Address, Command) ->
   send_one_command(Module, Address, Command, infinity).
@@ -602,7 +602,7 @@ send_one_command(Module, Address, Command) ->
 
 -spec send_one_command(module(), term(), indira_json:struct(), timeout()) ->
   {ok, indira_json:struct()} | {error, Reason}
-when Reason :: bad_request_format | bad_reply_format | term().
+  when Reason :: bad_request_format | bad_reply_format | term().
 
 send_one_command(Module, Address, Command, Timeout) ->
   case indira_json:encode(Command) of
@@ -632,7 +632,7 @@ send_one_command(Module, Address, Command, Timeout) ->
 -spec retry_send_one_command(module(), term(), indira_json:struct(),
                              timeout()) ->
   {ok, indira_json:struct()} | {error, Reason}
-when Reason :: bad_request_format | bad_reply_format | term().
+  when Reason :: bad_request_format | bad_reply_format | term().
 
 retry_send_one_command(Module, Address, Command, Timeout) ->
   case indira_json:encode(Command) of

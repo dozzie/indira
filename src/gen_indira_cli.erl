@@ -115,7 +115,8 @@
 %%%         simple track of sending a request with {@link
 %%%         indira:send_one_command/3} and processing reply is not enough
 %%%         (e.g. starting the daemon itself); function returns {@type ok} or
-%%%         {@type @{error, term()@}}
+%%%         {@type @{error, term()@}} (returned verbatim to {@link execute/3}
+%%%         caller)
 %%%
 %%%       Arguments:
 %%%       <ul>
@@ -127,7 +128,8 @@
 %%%     <li>`format_request(Command, Options)' -- encode a command as
 %%%         a JSON-serializable structure, so it can be sent through
 %%%         administrative socket; function returns {@type @{ok, request()@}}
-%%%         or {@type @{error, term()@}}
+%%%         or {@type @{error, Reason :: term()@}} (returned as `{error,
+%%%         {format, Reason}}' to {@link execute/3} caller)
 %%%
 %%%       Arguments:
 %%%       <ul>
@@ -139,7 +141,7 @@
 %%%     </li>
 %%%     <li>`handle_reply(Reply, Command, Options)' -- process a reply to
 %%%         a command sent to daemon; function returns {@type ok} or {@type
-%%%         @{error, term()@}}
+%%%         @{error, term()@}} (returned verbatim to {@link execute/3} caller)
 %%%
 %%%       Arguments:
 %%%       <ul>
@@ -229,13 +231,25 @@
 %%%---------------------------------------------------------------------------
 
 %% @doc Execute an operation specified in command line.
+%%
+%% Error formats:
+%% <ul>
+%%   <li>`{error, {arguments, Reason}' when `parse_arguments()' callback
+%%       returns an error</li>
+%%   <li>`{error, {format, Reason}}' when `format_request()' callback returns
+%%       an error</li>
+%%   <li>`{error, {send, Reason}}' on connection or (de)serialization error
+%%       (the same as for {@link indira:send_one_command/3})</li>
+%%   <li>`{error, Reason}' when `handle_command()' or `handle_reply()',
+%%       whichever is called, return an error</li>
+%% </ul>
 
 -spec execute([string()], module(), term()) ->
-    ok
-  | help
-  | {error, bad_request_format | bad_reply_format
-            | {arguments | send | format, term()}
-            | term()}.
+  ok | help | {error, Reason}
+  when Reason :: {arguments, term()}
+               | {format, term()}
+               | {send, bad_request_format | bad_reply_format | term()}
+               | term().
 
 execute(Args, CLIHandler, Defaults) ->
   case CLIHandler:parse_arguments(Args, Defaults) of
@@ -264,8 +278,9 @@ execute_command(CLIHandler, Command, Options) ->
 
 -spec send_command(module(), command(), options(), socket_address()) ->
   ok | {error, Reason}
-when Reason :: {send, bad_request_format | bad_reply_format | term()}
-             | {format, term()}.
+  when Reason :: {send, bad_request_format | bad_reply_format | term()}
+               | {format, term()}
+               | term().
 
 send_command(CLIHandler, Command, Options, {SockMod, SockAddr} = _Address) ->
   case CLIHandler:format_request(Command, Options) of
