@@ -1,21 +1,28 @@
 {application, indira, [
-  {description, ""},
-  {vsn, "0.2.0"},
+  {description, "daemonization helper tools"},
+  {vsn, "1.0.0"},
   {registered, [
     indira_sup,
+    indira_boot_sup,
     indira_command_sup,
-    indira_commander,
-    indira_listener_sup,
+    indira_socket_sup,
+    indira_tcp_conn_sup,
+    indira_unix_conn_sup,
+    indira_chdir,
     indira_dist_erl,
     indira_pidfile
   ]},
   {applications, [kernel, stdlib]},
-  {mod, {indira_app, []}},
+  {mod, {indira_application, []}},
   {env, [
     %{command, Callback :: fun() | {fun(), term()} | {module(), term()}},
     %{pidfile, Path :: file:filename()},
-    %{net, {Node :: atom(), NameType :: shortnames | longnames, Cookie :: atom() | none}},
+    %{workdir, Path :: file:filename()},
+    %{net, {Node :: atom(), NameType :: shortnames | longnames,
+    %        Cookie :: atom() | {file, file:filename()} | none}},
     {net_start, false},
+    {start_before, []},
+    {start_after, []},
     {listen, []}
   ]}
 ]}.

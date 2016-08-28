@@ -1,7 +1,10 @@
 %%%---------------------------------------------------------------------------
 %%% @private
 %%% @doc
-%%%   Command handler process.
+%%%   Administrative command handler module. This module executes a command
+%%%   handler module (the one that implements {@link gen_indira_command}).
+%%%
+%%% @see gen_indira_command
 %%% @end
 %%%---------------------------------------------------------------------------
 
@@ -9,8 +12,12 @@
 
 -behaviour(gen_server).
 
+%% interface for gen_indira_socket
+-export([spawn_worker/0]).
+-export([execute/2, execute/3]).
+
 %% supervision tree API
--export([start/4, start_link/4]).
+-export([start/3, start_link/3]).
 
 %% gen_server callbacks
 -export([init/1, terminate/2]).
@@ -18,29 +25,71 @@
 -export([code_change/3]).
 
 %%%---------------------------------------------------------------------------
+%%% types {{{
 
 -record(state, {
-  module,
-  arg,
-  line,
-  replyto
+  module :: module(),
+  argument :: gen_indira_command:argument(),
+  owner :: {pid(), reference()}
 }).
+
+%%% }}}
+%%%---------------------------------------------------------------------------
+%%% interface for gen_indira_socket
+%%%---------------------------------------------------------------------------
+
+%% @doc Spawn a new command executor process.
+
+-spec spawn_worker() ->
+  {ok, pid()} | {error, term()}.
+
+spawn_worker() ->
+  indira_command_sup:spawn_worker(self()).
+
+%% @doc Execute an incoming command line.
+%%
+%%   Function returns immediately, and the result is later sent as `{result,
+%%   ReplyLine}' to the worker's owner (`{error, exit | error | throw,
+%%   Reason}' in case of handler's death or unserializable result).
+%%
+%%   Worker process exits as soon as it finishes the job.
+
+-spec execute(pid(), string() | binary()) ->
+  ok.
+
+execute(Pid, CommandLine) ->
+  gen_server:cast(Pid, {execute, CommandLine}).
+
+%% @doc Execute an incoming command line.
+%%
+%%   Function returns immediately, and the result is later sent as `{result,
+%%   RoutingKey, ReplyLine}' to the worker's owner (`{error, RoutingKey,
+%%   exit | error | throw, Reason}' in case of handler's death or
+%%   unserializable result).
+%%
+%%   Worker process exits as soon as it finishes the job.
+
+-spec execute(pid(), string() | binary(), term()) ->
+  ok.
+
+execute(Pid, CommandLine, RoutingKey) ->
+  gen_server:cast(Pid, {execute, CommandLine, RoutingKey}).
 
 %%%---------------------------------------------------------------------------
 %%% supervision tree API
 %%%---------------------------------------------------------------------------
 
 %% @private
-%% @doc Start command handler process.
+%% @doc Start command executor process.
 
-start(Module, Arg, Command, ReplyTo) ->
-  gen_server:start(?MODULE, [Module, Arg, Command, ReplyTo], []).
+start(Module, Arg, Owner) ->
+  gen_server:start(?MODULE, [Module, Arg, Owner], []).
 
 %% @private
-%% @doc Start command handler process.
+%% @doc Start command executor process.
 
-start_link(Module, Arg, Command, ReplyTo) ->
-  gen_server:start_link(?MODULE, [Module, Arg, Command, ReplyTo], []).
+start_link(Module, Arg, Owner) ->
+  gen_server:start_link(?MODULE, [Module, Arg, Owner], []).
 
 %%%---------------------------------------------------------------------------
 %%% gen_server callbacks
@@ -50,19 +99,19 @@ start_link(Module, Arg, Command, ReplyTo) ->
 %% initialization/termination {{{
 
 %% @private
-%% @doc Initialize event handler.
+%% @doc Initialize {@link gen_server} state.
 
-init([Module, Arg, Line, ReplyTo] = _Args) ->
+init([Module, Arg, Owner] = _Args) ->
+  MonRef = erlang:monitor(process, Owner),
   State = #state{
     module = Module,
-    arg = Arg,
-    line = Line,
-    replyto = ReplyTo
+    argument = Arg,
+    owner = {Owner, MonRef}
   },
-  {ok, State, 0}.
+  {ok, State}.
 
 %% @private
-%% @doc Clean up after event handler.
+%% @doc Clean up {@link gen_server} state.
 
 terminate(_Arg, _State) ->
   ok.
@@ -81,6 +130,24 @@ handle_call(_Request, _From, State) ->
 %% @private
 %% @doc Handle {@link gen_server:cast/2}.
 
+handle_cast({execute, CommandLine} = _Request,
+            State = #state{owner = {Owner, _}}) ->
+  case execute_line(CommandLine, State) of
+    {ok, ReplyLine}         -> Owner ! {result, ReplyLine};
+    {error, {Type, Reason}} -> Owner ! {error, Type, Reason};
+    {error, Reason}         -> Owner ! {error, error, Reason}
+  end,
+  {stop, normal, State};
+
+handle_cast({execute, CommandLine, RoutingKey} = _Request,
+            State = #state{owner = {Owner, _}}) ->
+  case execute_line(CommandLine, State) of
+    {ok, ReplyLine}         -> Owner ! {result, RoutingKey, ReplyLine};
+    {error, {Type, Reason}} -> Owner ! {error, RoutingKey, Type, Reason};
+    {error, Reason}         -> Owner ! {error, RoutingKey, error, Reason}
+  end,
+  {stop, normal, State};
+
 %% unknown casts
 handle_cast(_Request, State) ->
   {noreply, State}.
@@ -88,22 +155,8 @@ handle_cast(_Request, State) ->
 %% @private
 %% @doc Handle incoming messages.
 
-%% do all the job intended for this process
-handle_info(timeout = _Message, State = #state{}) ->
-  case decode_line(State) of
-    {ok, Command} ->
-      Response = handle_command(Command, State),
-      case encode_response(Response) of
-        {ok, Line} ->
-          send_response(Line, State);
-        {error, _Reason} ->
-          indira_log:error(command_error,
-                           [{type, bad_response}, {response, Response}])
-      end;
-    {error, _Reason} ->
-      indira_log:error(command_error,
-                       [{type, bad_request}, {request, State#state.line}])
-  end,
+handle_info({'DOWN', MonRef, process, Pid, _Reason} = _Message,
+            State = #state{owner = {Pid, MonRef}}) ->
   {stop, normal, State};
 
 %% unknown messages
@@ -124,56 +177,33 @@ code_change(_OldVsn, State, _Extra) ->
 %%----------------------------------------------------------
 
 %%%---------------------------------------------------------------------------
-%%% helpers
-%%%---------------------------------------------------------------------------
 
-%% @doc Decode line sent by client.
+%% @doc Parse incoming line, pass it to `Module' and return a serialized
+%%   reply.
 
--spec decode_line(#state{}) ->
-  {ok, gen_indira_command:command()} | {error, term()}.
+-spec execute_line(string() | binary(), #state{}) ->
+  {ok, iolist()} | {error, Reason}
+  when Reason :: bad_request_format
+               | bad_reply_format
+               | {throw | error | exit, Reason}.
 
-decode_line(_State = #state{line = Line}) ->
-  indira_json:decode(Line).
-
-%% @doc Encode response to send to client.
-
--spec encode_response(indira_json:struct()) ->
-  {ok, iolist()} | {error, term()}.
-
-encode_response(Response) ->
-  indira_json:encode(Response).
-
-%% @doc Call appropriate module and return its returned value.
-
--spec handle_command(gen_indira_command:command(), #state{}) ->
-  gen_indira_command:command_response().
-
-handle_command(Command, _State = #state{module = Module, arg = Arg}) ->
-  try
-    Module:handle_command(Command, Arg)
-  catch
-    error:Reason ->
-      indira_log:error(command_error, [{type, error}, {reason, Reason}]),
-      [{exception, <<"unexpected error">>}];
-    exit:Reason ->
-      indira_log:error(command_error, [{type, exit}, {reason, Reason}]),
-      [{exception, <<"unexpected exit">>}];
-    throw:Value ->
-      indira_log:error(command_error, [{type, throw}, {value, Value}]),
-      [{exception, <<"uncaught throw">>}]
+execute_line(CommandLine, _State = #state{module = Module, argument = Arg}) ->
+  case indira_json:decode(CommandLine) of
+    {ok, Command} ->
+      try Module:handle_command(Command, Arg) of
+        Reply ->
+          case indira_json:encode(Reply) of
+            {ok, ReplyLine} -> {ok, ReplyLine};
+            {error, badarg} -> {error, bad_reply_format}
+          end
+      catch
+        throw:Reason -> {error, {throw, Reason}};
+        error:Reason -> {error, {error, Reason}};
+        exit:Reason  -> {error, {exit,  Reason}}
+      end;
+    {error, badarg} ->
+      {error, bad_request_format}
   end.
-
-%% @doc Send a response to a client.
-
--spec send_response(iolist(), #state{}) ->
-  ok.
-
-send_response(Response, _State = #state{replyto = Pid}) when is_pid(Pid) ->
-  Pid ! {result, Response},
-  ok;
-send_response(Response, _State = #state{replyto = {Pid, Hint}}) ->
-  Pid ! {result, Hint, Response},
-  ok.
 
 %%%---------------------------------------------------------------------------
 %%% vim:ft=erlang:foldmethod=marker

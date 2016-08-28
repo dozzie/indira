@@ -7,16 +7,17 @@
 -module(indira_syslog).
 
 %% message formatting API
--export([format/4]).
+-export([format/4, format/5]).
 -export([encode/2, decode/1, facility/1, priority/1]).
 %% syslog connection handling
 -export([open_local/1, open_remote/2]).
 -export([send/2]).
+-export([controlling_process/2]).
 -export([close/1]).
+%% error formatting
+-export([format_error/1]).
 
 -export_type([facility/0, priority/0, ident/0, connection/0]).
-
-%%%---------------------------------------------------------------------------
 
 %%%---------------------------------------------------------------------------
 %%% data types {{{
@@ -59,11 +60,12 @@
 -type ident() :: string() | atom().
 %% Identification of current process (daemon name).
 
+-type hostname() :: string().
+%% Host being the source of a message.
+
 -type connection() :: term().
 
 %%% }}}
-%%%---------------------------------------------------------------------------
-
 %%%---------------------------------------------------------------------------
 
 %%%---------------------------------------------------------------------------
@@ -85,6 +87,20 @@ format(Facility, Priority, Ident, Message) ->
   % <158>May  4 04:50:21 aaa[12345]: foo
   io_lib:format("<~B>~s ~s[~s]: ~s",
                 [encode(Facility, Priority), syslog_time(), Ident, os:getpid(),
+                  Message]).
+
+%% @doc Format message for sending to syslog.
+%%
+%%   Returned data doesn't contain trailing newline.
+
+-spec format(facility(), hostname(), priority(), ident(), iolist()) ->
+  iolist().
+
+format(Facility, Hostname, Priority, Ident, Message) ->
+  % <158>May  4 04:50:21 host01 aaa[12345]: foo
+  io_lib:format("<~B>~s ~s ~s[~s]: ~s",
+                [encode(Facility, Priority), syslog_time(),
+                  Hostname, Ident, os:getpid(),
                   Message]).
 
 %% }}}
@@ -281,6 +297,21 @@ send({udp, Socket, {Host, Port}} = _Syslog, Message) ->
 
 %% }}}
 %%----------------------------------------------------------
+%% changing the connection owner {{{
+
+%% @doc Set the connection owner.
+
+-spec controlling_process(connection(), pid()) ->
+  ok | {error, not_owner | badarg}.
+
+controlling_process({unix, Socket} = _Syslog, Pid) ->
+  indira_af_unix:controlling_process(Socket, Pid);
+
+controlling_process({udp, Socket, {_Host, _Port}} = _Syslog, Pid) ->
+  gen_udp:controlling_process(Socket, Pid).
+
+%% }}}
+%%----------------------------------------------------------
 %% closing connection {{{
 
 %% @doc Close a connection to syslog.
@@ -298,6 +329,19 @@ close({udp, Socket, {_Host, _Port}} = _Syslog) ->
 
 %% }}}
 %%----------------------------------------------------------
+
+%%%---------------------------------------------------------------------------
+
+%% @doc Convert a `Reason' from error tuple into usable error message.
+
+-spec format_error(term()) ->
+  string().
+
+format_error(Reason) ->
+  % `gen_udp' and `indira_af_unix' have pretty much the same errors, except
+  % for `gen_udp:send()', which can return `{error,not_owner}', but even this
+  % is covered by `indira_af_unix'
+  indira_af_unix:format_error(Reason).
 
 %%%---------------------------------------------------------------------------
 %%% vim:ft=erlang:foldmethod=marker

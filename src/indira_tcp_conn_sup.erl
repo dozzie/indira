@@ -1,22 +1,34 @@
 %%%---------------------------------------------------------------------------
 %%% @private
 %%% @doc
-%%%   Indira top-level supervisor.
+%%%   TCP connection handlers supervisor.
 %%% @end
 %%%---------------------------------------------------------------------------
 
--module(indira_sup).
+-module(indira_tcp_conn_sup).
 
 -behaviour(supervisor).
 
-%% public API
+%% public interface
+-export([spawn_worker/1]).
+
+%% supervision tree API
 -export([start_link/0]).
 
 %% supervisor callbacks
 -export([init/1]).
 
 %%%---------------------------------------------------------------------------
-%%% public API
+%%% public interface
+%%%---------------------------------------------------------------------------
+
+%% @doc Start a new worker process.
+
+spawn_worker(Socket) ->
+  supervisor:start_child(?MODULE, [Socket]).
+
+%%%---------------------------------------------------------------------------
+%%% supervision tree API
 %%%---------------------------------------------------------------------------
 
 %% @private
@@ -33,17 +45,11 @@ start_link() ->
 %% @doc Initialize supervisor.
 
 init(_Args) ->
-  Strategy = {one_for_one, 5, 10},
+  Strategy = {simple_one_for_one, 5, 10},
   Children = [
-    {indira_boot_sup,
-      {indira_boot_sup, start_link, []},
-      permanent, 5000, supervisor, [indira_boot_sup]},
-    {indira_command_sup,
-      {indira_command_sup, start_link, []},
-      permanent, 5000, supervisor, [indira_command_sup]},
-    {indira_socket_sup,
-      {indira_socket_sup, start_link, []},
-      permanent, 5000, supervisor, [indira_socket_sup]}
+    {undefined,
+      {indira_tcp_conn, start_link, []},
+      temporary, 5000, worker, [indira_tcp_conn]}
   ],
   {ok, {Strategy, Children}}.
 

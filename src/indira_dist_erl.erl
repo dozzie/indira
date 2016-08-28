@@ -6,8 +6,6 @@
 %%%   This process is intended for configuring Erlang networking in
 %%%   a (possibly) delayed manner. Networking can be established and shut down
 %%%   as necessary, instead of keeping it running all the time.
-%%%
-%%% @TODO Re-read cookie file, if this was the way the cookie was specified.
 %%% @end
 %%%---------------------------------------------------------------------------
 
@@ -16,7 +14,7 @@
 -behaviour(gen_server).
 
 %% public interface
--export([bring_up/0, tear_down/0]).
+-export([bring_up/0, tear_down/0, read_cookie/1]).
 
 %% supervision tree API
 -export([start/0, start_link/0]).
@@ -33,8 +31,9 @@
   initial_status :: started | stopped
 }).
 
--type net_config() ::
-  {Node :: atom(), shortnames | longnames, Cookie :: atom() | none}.
+-type cookie() :: atom() | {file, file:filename()} | none.
+
+-type net_config() :: {node(), shortnames | longnames, cookie()}.
 
 %%%---------------------------------------------------------------------------
 %%% public interface
@@ -56,18 +55,46 @@ bring_up() ->
 tear_down() ->
   gen_server:call(?MODULE, stop).
 
+%% @doc Read a magic cookie from a specified file.
+%%   The cookie is the first line of the file.
+
+-spec read_cookie(file:filename()) ->
+  {ok, atom()} | {error, term()}.
+
+read_cookie(Filename) ->
+  case file:open(Filename, [read, raw, binary]) of
+    {ok, FH} ->
+      ReadResult = file:read_line(FH),
+      file:close(FH),
+      case ReadResult of
+        {ok, Line} ->
+          case binary:split(Line, <<"\n">>, [trim]) of
+            [LineNoNL] when size(LineNoNL) > 0 ->
+              {ok, binary_to_atom(LineNoNL, utf8)};
+            [<<>>] ->
+              {error, empty_file}
+          end;
+        eof ->
+          {error, empty_file};
+        {error, Reason} ->
+          {error, Reason}
+      end;
+    {error, Reason} ->
+      {error, Reason}
+  end.
+
 %%%---------------------------------------------------------------------------
 %%% supervision tree API
 %%%---------------------------------------------------------------------------
 
 %% @private
-%% @doc Start example process.
+%% @doc Start configurator process.
 
 start() ->
   gen_server:start({local, ?MODULE}, ?MODULE, [], []).
 
 %% @private
-%% @doc Start example process.
+%% @doc Start configurator process.
 
 start_link() ->
   gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
@@ -80,19 +107,31 @@ start_link() ->
 %% initialization/termination {{{
 
 %% @private
-%% @doc Initialize event handler.
+%% @doc Initialize {@link gen_server} state.
 
 init(_Args) ->
+  indira_log:set_context(erlang_networking, []),
   {NetInitialStatus, NetConfig} = get_network_config(),
   State = #state{
     config = NetConfig,
     initial_status = NetInitialStatus
   },
-  % do the work in `timeout' message handler
-  {ok, State, 0}.
+  case NetInitialStatus of
+    started ->
+      case start_network(NetConfig) of
+        ok ->
+          {ok, State};
+        {error, Reason} ->
+          indira_log:crit("can't configure Erlang networking",
+                          [{error, Reason}]),
+          {stop, {net_error, Reason}}
+      end;
+    stopped ->
+      {ok, State}
+  end.
 
 %% @private
-%% @doc Clean up after event handler.
+%% @doc Clean up {@link gen_server} state.
 
 terminate(_Arg, _State = #state{}) ->
   ok.
@@ -112,14 +151,20 @@ handle_call(start = _Request, _From, State = #state{config = undefined}) ->
   {reply, Reply, State};
 
 handle_call(start = _Request, _From, State = #state{config = NetConfig}) ->
-  Reply = start_network(NetConfig),
+  case start_network(NetConfig) of
+    ok = Reply ->
+      ok;
+    {error, Reason} = Reply ->
+      indira_log:info("can't configure Erlang networking", [{error, Reason}])
+  end,
   {reply, Reply, State};
 
 handle_call(stop = _Request, _From, State) ->
-  Reply = case net_kernel:stop() of
-    ok -> ok;
-    {error, not_found} -> ok;
-    {error, Reason} -> {error, Reason}
+  case stop_network() of
+    ok = Reply ->
+      ok;
+    {error, Reason} = Reply ->
+      indira_log:info("can't shutdown Erlang networking", [{error, Reason}])
   end,
   {reply, Reply, State};
 
@@ -136,20 +181,6 @@ handle_cast(_Request, State) ->
 
 %% @private
 %% @doc Handle incoming messages.
-
-handle_info(timeout = _Message, State = #state{initial_status = stopped}) ->
-  % initially networking is to be stopped, nothing to be done
-  {noreply, State};
-
-handle_info(timeout = _Message,
-            State = #state{initial_status = started, config = NetConfig}) ->
-  % if networking can't be brought up now, it's a critical error
-  case start_network(NetConfig) of
-    ok ->
-      {noreply, State};
-    {error, Reason} ->
-      {stop, {net_error, Reason}, State}
-  end;
 
 %% unknown messages
 handle_info(_Message, State) ->
@@ -176,10 +207,27 @@ code_change(_OldVsn, State, _Extra) ->
 -spec start_network(net_config()) ->
   ok | {error, term()}.
 
+start_network({Node, NameType, {file, CookieFile}} = _NetConfig) ->
+  case read_cookie(CookieFile) of
+    {ok, Cookie} -> start_network({Node, NameType, Cookie});
+    {error, Reason} -> {error, {read_cookie, Reason}}
+  end;
 start_network({Node, NameType, Cookie} = _NetConfig) ->
   case net_kernel:start([Node, NameType]) of
     {ok, _Pid} -> set_cookie(Cookie);
     {error, {already_started, _Pid}} -> set_cookie(Cookie);
+    {error, Reason} -> {error, Reason}
+  end.
+
+%% @doc Stop Erlang's networking.
+
+-spec stop_network() ->
+  ok | {error, term()}.
+
+stop_network() ->
+  case net_kernel:stop() of
+    ok -> ok;
+    {error, not_found} -> ok;
     {error, Reason} -> {error, Reason}
   end.
 

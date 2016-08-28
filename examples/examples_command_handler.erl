@@ -5,27 +5,24 @@
 %%%   Command handler may be either a callback module ({@section Command
 %%%   handler module}) or a function ({@section Command handler function}).
 %%%
+%%%   The module-based approach is recommended, as function-based one
+%%%   interferes with code upgrade mechanism.
+%%%
 %%%   == Command handler module ==
 %%%
-%%%   Note that only `handle_command/2' here is really required. `prepare_*()'
-%%%   and `result_*()' functions are added so all the forming and decoding the
-%%%   structures carrying commands and results is in the same place, so they
-%%%   can be changed at the same time.
+%%%   === Minimal command handler ===
+%%%
+%%%   This is the smallest useful command handler module. For real use it's
+%%%   not too convenient, though, as you need to store the structure of
+%%%   commands and replies in two places: in this handler and in the script
+%%%   that talks to Indira.
 %%%
 %```
-%-module(command_handler).
+%-module(example_command_handler).
 %
 %-behaviour(gen_indira_command).
 %
-% %% gen_indira_command behaviour
 %-export([handle_command/2]).
-%
-% %% exports for escript (controlling command)
-%-export([prepare_stop/0, result_stop/1]).
-%-export([prepare_reload/1, result_reload/1]).
-%-export([prepare_status/0, prepare_status/1, result_status/1]).
-%
-% %%--------------------------------------------------
 %
 %handle_command([{<<"command">>, <<"stop">>}] = _Command, _Arg) ->
 %  % in the client, be prepared to have connection closed before any message
@@ -33,110 +30,110 @@
 %  init:stop(),
 %  [{result, ok}];
 %
-%handle_command([{<<"command">>, <<"reload">>}, {<<"file">>, File}] = _Command,
-%               _Arg) ->
-%  case my_application:reload(File) of
-%    ok -> [{result, ok}];
-%    {error, _Reason} -> [{result, error}] % could include the error message
-%  end;
+% % other commands...
 %
-%handle_command([{<<"command">>, <<"status">>}, {<<"wait">>, false}] = _Command,
-%               _Arg) ->
-%  Running = check_running(),
-%  [{running, Running}];
-%handle_command([{<<"command">>, <<"status">>}, {<<"wait">>, true}] = _Command,
-%               _Arg) ->
-%  wait_for_running(),
-%  [{running, true}]; % because we waited for it
-%
-%handle_command(_Command, _Arg) ->
+%handle_command(Command, _Arg) ->
+%  io:fwrite("got command ~p~n", [Command]),
 %  [{error, <<"unrecognized command">>}].
-%
-% %%--------------------------------------------------
-%
-%check_running() ->
-%  % NOTE: you want stronger check, like looking at what my_application_sup's
-%  % children are started, as this is true as soon as the booting started, not
-%  % as it finished
-%  case whereis(my_application_sup) of
-%    Pid when is_pid(Pid) -> true;
-%    undefined -> false
-%  end.
-%
-%wait_for_running() ->
-%  case check_running() of
-%    true -> ok;
-%    false -> timer:sleep(100), wait_for_running()
-%  end.
-%
-% %%--------------------------------------------------
-%
-%prepare_stop() ->
-%  [{command, stop}].
-%
-%prepare_reload(File) when is_list(File) ->
-%  prepare_reload(iolist_to_binary(File));
-%prepare_reload(File) when is_binary(File) ->
-%  [{command, reload}, {file, File}].
-%
-%prepare_status() ->
-%  prepare_status(false).
-%
-%prepare_status(Wait) ->
-%  [{<<"command">>, <<"status">>}, {<<"wait">>, Wait}].
-%
-% %%--------------------------------------------------
-% %% note that these functions die on unexpected reply
-%
-%result_stop([{result, ok}] = _Result) ->
-%  ok;
-%result_stop({error, closed} = _Result) ->
-%  % Erlang runtime apparently stopped before Indira sent a reply
-%  ok.
-%
-%result_reload([{result, ok}] = _Result) ->
-%  ok;
-%result_reload([{result, error}] = _Result) ->
-%  {error, bad_config}.
-%
-%result_status([{running, true}] = _Result) ->
-%  running;
-%result_status([{running, false}] = _Result) ->
-%  not_running.
 %'''
 %%%
-%%%   This way, controller script (`escript') can use the functions to talk to
-%%%   command handler module, similar to this:
+%%%   === More advanced command handler ===
+%%%
+%%%   A little more useful in the long run is to have all three things in the
+%%%   same place: encoding a command in a JSON-serializable structure,
+%%%   reacting to it (`handle_command()'), and decoding a reply.
+%%%   Together with appropriate examples from {@link examples_cli_handler} and
+%%%   {@link examples_escript}, this module forms a skeleton for a convenient
+%%%   administrative interface to an application.
 %%%
 %```
-%Command = command_handler:prepare_reload("/etc/foo/foo.conf"),
-%Reply = command_handler:result_reload(send_command(Conn, Command)),
-%case Reply of
-%  ok ->
-%    io:fwrite("reload successful~n");
-%  {error, Reason} ->
-%    io:fwrite("reload failed: ~p~n", [Reason]),
-%    halt(1)
-%end.
+%-module(example_command_handler).
+%
+%-behaviour(gen_indira_command).
+%
+%-export([handle_command/2]).
+%-export([format_request/1, decode_reply/1]).
+%
+%handle_command([{<<"command">>, <<"stop">>}] = _Command, _Arg) ->
+%  % in the client, be prepared to have connection closed before any message
+%  % comes through
+%  init:stop(),
+%  [{result, ok}];
+%
+%handle_command([{<<"command">>, <<"get_pid">>}] = _Command, _Arg) ->
+%  OSPid = list_to_binary(os:getpid()),
+%  [{result, ok}, {pid, OSPid}];
+%
+% % other commands...
+%
+%handle_command(Command, _Arg) ->
+%  io:fwrite("got command ~p~n", [Command]),
+%  [{error, <<"unrecognized command">>}].
+%
+%format_request(stop    = _Command) -> [{<<"command">>, <<"stop">>}];
+%format_request(get_pid = _Command) -> [{<<"command">>, <<"get_pid">>}];
+% % other commands...
+%
+%decode_reply([{<<"result">>, <<"ok">>}] = _Reply) ->
+%  ok;
+%decode_reply([{<<"pid">>, Pid}, {<<"result">>, <<"ok">>}] = _Reply) ->
+%  % when using `gen_indira_cli' or `indira_cli:send_one_command()', decoded
+%  % replies are orddict-compatible, so the keys in `Reply' are sorted
+%  {ok, Pid};
+%decode_reply([{<<"error">>, Message}] = _Reply) ->
+%  {error, Message}.
+%'''
+%%%
+%%%   This way all the knowledge about requests structure is in one place and
+%%%   the code for `escript' or {@link gen_indira_cli} uses much simpler
+%%%   interface:
+%%%
+%```
+% % escript
+%Request = example_command_handler:format_request(get_pid),
+%{ok, Reply} = indira_cli:send_one_command(
+%  ?ADMIN_SOCK_MODULE, ?ADMIN_SOCK_ADDRESS,
+%  Request,
+%  []
+%),
+%{ok, Pid} = example_command_handler:decode_reply(Reply),
+%io:fwrite("~s~n", [Pid]).
+%
+% % gen_indira_cli
+%format_request(Op, _Command) when Op == stop; Op == get_pid ->
+%  Request = example_command_handler:format_request(Op),
+%  {ok, Request}.
+%
+%handle_reply(Reply, get_pid = _Op, _Command) ->
+%  case example_command_handler:decode_reply(Reply) of
+%    {ok, Pid} -> io:fwrite("~s~n", [Pid]), ok;
+%    {error, Message} -> {error, Message}
+%  end;
+%handle_reply(Reply, stop = _Op, _Command) ->
+%  example_command_handler:decode_reply(Reply).
 %'''
 %%%
 %%%   == Command handler function ==
 %%%
-%%%   This is how to specify a function as a command handler in controlling
-%%%   script:
-%```
-%indira:set_option(indira, command, fun(C) -> handle_command(C) end),
-%indira:start_rec(indira).
-%'''
-%%%
-%%%   The `handle_command/1' function is defined as follows:
+%%%   For times when you <em>really</em> want to avoid adding a separate
+%%%   module, you can still provide a function that will handle the commands.
 %%%
 %```
-%handle_command([{<<"command">>, <<"stop">>}] = _Command) ->
+%#!/usr/bin/escript
+%
+%main(_Args) ->
+%  application:load(indira),
+%  application:set_env(indira, listen, [...]),
+%  application:set_env(indira, command, fun(C) -> handle_command_fun(C) end),
+%  indira_app:start_rec(indira),
+%  indira_app:sleep_forever().
+%
+%handle_command_fun(<<"stop">> = _Command) ->
 %  init:stop(),
 %  [{result, ok}];
-%handle_command(_Command) ->
-%  [{result, error}, {message, <<"unknown command">>}].
+%handle_command_fun(Command) ->
+%  io:fwrite("got command ~p~n", [Command]),
+%  [{error, <<"unrecognized command">>}].
 %'''
 %%%
 %%%   This way of providing command handlers is not recommended, as it's

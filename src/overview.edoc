@@ -1,83 +1,209 @@
 @author Stanislaw Klekot <dozzie@jarowit.net>
-@title Indira, Mother of D(a)emons.
-@version 0.2.0
+@title Indira, Mother of Daemons.
+@version 1.0.0
 @see indira
+@see indira_app
+@see indira_cli
 @see gen_indira_command
+@see gen_indira_cli
 @doc
 
 Indira is an application for turning Erlang applications into unix daemons
 with as little effort as possible.
 
 Indira is intended for people writing command line interface for Erlang
-services. This means mainly package maintainers and sysadmins who want to run
-their own Erlang code.
-
-Indira provides functions for initial interaction with OS (like changing
-working directory or write PID file), configuring Erlang applications and
-starting them with their dependencies, setting up logging subsystem and
-initializing command channels.
-
-Note that Indira <b>is not</b> a module for loading data. It may be highly
-inefficient. For management interface it shouldn't matter, though:
-commands are typically a low-bandwidth traffic.
+applications. In the current landscape of Erlang-OS integration this means
+mostly package maintainers and sysadmins who want to run their own Erlang
+code.
 
 The application is named after Indira Toledo, a character of an excellent S-F
 novel titled <i>Mother of Demons</i> by Eric Flint.
 
-== Usage ==
+== Why would you want Indira? ==
 
-=== Basic usage ===
+Indira is a great help when you want Erlang application to cooperate with
+operating system. This is best visible with deploying Erlang code as binary
+packages (e.g. DEB or RPM), when the application needs to be stopped
+gracefully on system shutdown. Erlang doesn't have support for signal
+handlers, so an initscript needs tell the service to stop in a different way.
+Unfortunately, configuring distributed Erlang so that the initscript can
+connect while sysadmin retains ability to setup Erlang cluster is difficult.
+Indira solves this problem by providing separate administrative channel that
+can listen on unix socket.
 
-Main idea behind using Indira is to have all the daemon's code written as
-Erlang application: spawning processes in supervision tree, specifying
-dependencies like `ssl' or `ssh' or `inets' applications, reading
-configuration with {@link application:get_env/2} and so on. Daemonized
-application doesn't need to (and probably shouldn't) know about Indira at all.
-It also shouldn't attempt to interact with operating system about
-daemonization, like reading command line arguments, configuration files or
-writing PID files.
+You may also want to use Indira is if you want to configure an application
+with INI/TOML/YAML files and command line options, but preserve Erlang's
+original way of using application environment ({@link application:get_env/2}).
+Indira covers parsing command line arguments with {@link indira_cli:folds/3}
+and {@link indira_cli:foldg/3} functions, and simplifies setting environment
+parameters from configuration file with {@link indira_app:set_env/4}.
 
-Indira shows up in {@link examples_escript. command line script} (run by
-`escript'), which is used to preconfigure application's environment, start
-required applications and do other tasks required to run a daemon. Indira only
-relies on {@link application} interface and on parameters provided by command
-line script.
+The things above allow to lower the Erlang proficiency requirements for
+sysadmins, give them convenient administrative interface, and distribute
+Erlang applications in binary packages in easier and much more elegant way
+than before.
 
-Indira may also be injected to already-written services to add
-instrumentation, logging, monitoring probes and so on. See
-{@link examples_app_config. configuration examples}.
+== Walkthrough ==
 
-=== Command subsystem ===
+Indira tries to bring structure to running and managing Erlang applications
+from unix command line. This works on three planes:
 
-There is an additional, optional -- although highly recommended -- subsystem
-of issuing commands to the daemonized application. From the application it
-requires a {@link examples_command_handler. command handler} to be specified.
-Such handler receives messages of {@link indira_json:struct(). jsx-like
-structure} and replies to them with other messages (see {@link
-gen_indira_command} module for details). Still, an application doesn't need to
-know about Indira.
+<ul>
+  <li>{@section Command line processing} covers parsing the arguments
+      (<i>--option=value</i>) and carrying out the operation (starting the
+      daemon, or telling it to stop or reload configuration) specified this
+      way</li>
+  <li>{@section Starting Erlang applications} is about configuring and
+      starting the application using Erlang's regular {@link application}
+      interface, but with parameters coming from command line options and
+      configuration files that don't require Erlang knowledge</li>
+  <li>{@section Administrative channel} describes communicating with a running
+      daemon through means that are easy to setup from a package manager (i.e.
+      with no prior knowledge about cluster topology for distributed
+      Erlang)</li>
+</ul>
 
-In fact, the application doesn't even need to include command handler module.
-It could be written separately, as long as it knows how to talk to the
-application.
+What Indira does to help in these areas boils down to calling
+{@link application:set_env/3} and {@link application:start/2}, simple
+recursion over list of arguments ({@type [string()]}), and some socket
+communication using linewise-JSON request-reply protocol. This allows to
+supplement or replace any part of Indira with something different, if
+necessary.
 
-Indira on its part will start several so called
-{@link gen_indira_listener. listeners}, which receive commands from user. The
-commands will be passed to command executor and replies will be passed back to
-the user. List of listeners to start is specified in application
-configuration (see {@link examples_app_config} for some examples).
+For convenience, implementations of <i>AF_UNIX</i> sockets and JSON
+parser/emitter are included in Indira code, so no additional dependencies are
+required to use Indira.
 
-== Supervision tree ==
+=== Command line processing ===
 
-The supervision tree looks as follows:
+Indira's idea of running a daemon is to use Erlang code prepared to run under
+`escript(1)'. This script is called with a parameter which denotes an
+operation: start the daemon, tell it to stop or reload configuration, or
+similar.
 
-<img src="images/indira_supervision_tree.png" alt="Indira supervision tree" />
+Most of the operations are expected to fall into the category of sending
+a command to an already running daemon, receiving a reply ({@section
+Administrative channel}), and possibly printing the results on screen.
 
-== Where to start reading documentation ==
+An obvious exception from this rule is starting the daemon. This operation can
+be executed from `escript' by calling {@link application:start/2} in `main()'
+function and then sleeping forever (e.g. `timer:sleep(infinity)'), as the
+Erlang VM exits as soon as `main()' returns in this setting.
 
-Indira users typically want to study {@link indira} module as their main
-interface (including protocol used to execute commands coming from listeners).
+`escript' allows to specify options to Erlang VM, of which most important are
+<i>-args_file Path</i> and <i>-noinput</i>. The first one is a means to
+configure Erlang VM (parameters to `erl(1)') without modifying the script
+itself, while the second one prevents Erlang from accidentally eating all the
+memory when input comes on <i>STDIN</i>.
 
-Programmers writing listener modules will additionally need to read
-documentation of {@link gen_indira_listener} module, which also specifies
-communication protocol between Indira and listeners.
+Since Erlang doesn't have a mechanism to detach from terminal <i>after</i> its
+VM started, `escript' shouldn't do it by itself (<i>-detached</i> option).
+Instead, starting the daemon and ensuring it has actually started (important
+thing in initscripts) should be done more like this:
+
+```
+$ my_example_daemon start &
+$ if my_example_daemon wait-until-started; then echo "OK"; else echo "FAIL"; fi
+'''
+
+The script can call {@link indira_cli:execute/3} function, providing a module
+that implements {@link gen_indira_cli} behaviour. This module will be
+responsible for parsing the command line into a command, encoding the command
+so it can be sent to a running daemon, and processing the reply received from
+the daemon. There's also support for commands that don't fit into
+<i>send</i>-<i>receive</i>-<i>process</i> model, like starting the daemon.
+
+To facilitate parsing command line arguments, {@link indira_cli:folds/3} and
+{@link indira_cli:foldg/3} functions are provided.
+
+=== Starting Erlang applications ===
+
+Applications are basically started using {@link application:start/2}. To help
+starting applications along with their dependencies, there is a helper
+function {@link indira_app:start_rec/2} (especially for older Erlang releases,
+which didn't have `application:ensure_all_started()').
+
+Applications can be configured with {@link application:set_env/3}, preceded
+by {@link application:load/1} for each application. Again, to simplify this,
+there is a helper {@link indira_app:set_option/3}, which ensures that the
+application is loaded before setting environment option.
+
+{@link indira_app:set_env/4} further simplifies the process of configuring
+applications. It's called with a structure with all the parameters loaded from
+config files and command line options and sets appropriate option for each
+expected parameter. The call is something like this:
+
+```
+% ConfigStruct = [{"key1", ...}, {"key2", ...}, ...]
+{ok, ConfigStruct} = load_config(File),
+SetSpecs = [
+  {"key1", {app1, key1}},
+  {"key2", {app1, key2}},
+  ...
+],
+indira_app:set_env(
+  fun proplists:get_value/2,
+  fun check_option/3,
+  ConfigStruct,
+  SetSpecs
+).
+'''
+
+Configuring Indira can be done this way, but there is another helper,
+{@link indira_app:indira_setup/1}. It has the same options as
+{@link indira_app:daemonize/2}, which combines `indira_setup()' and
+`start_rec()' for Indira, apps to be started before and after Indira, and
+daemon's main application.
+
+This all fits with {@link indira_cli:execute/3} and {@link gen_indira_cli} as
+a clause of `handle_command()':
+
+```
+parse_arguments(Args, Defaults) ->
+  case indira_cli:folds(...) of
+    {ok, #options{op = start} = Options} ->
+      {ok, start, Options};
+    ...
+  end.
+
+handle_command(start = _Command, Options) ->
+  % ...
+  configure_apps(Options), % somewhere there indira_app:set_env() is called
+  indira_app:daemonize(my_application, [
+    ...
+  ]).
+'''
+
+=== Administrative channel ===
+
+Indira starts in its supervision tree processes that listen on specified
+sockets ({@link indira_unix. unix}, {@link indira_tcp. TCP}, or {@link
+indira_udp. UDP}; other types are possible, but not currently provided by
+Indira). These sockets receive commands to be executed, each encoded as a JSON
+object, formatted to fit in a single line.
+
+To execute a command, a separate Erlang process is spawned, and then a module
+implementing {@link gen_indira_command} behaviour is called to do the work.
+
+This allows to bolt to an already written application some custom code that
+runs with basically the same privileges as application's own processes. It can
+do quite interesting work, like exposing new metrics for monitoring or
+extending administrative commands set.
+
+== Further reading ==
+
+<ul>
+  <li>{@link indira_app}, {@link indira_cli} -- functions for use in `escript'
+      scripts</li>
+  <li>{@link gen_indira_cli} -- behaviour to parse command line and carry out
+      operations specified in it</li>
+  <li>{@link gen_indira_command} -- behaviour to execute commands inside
+      Erlang VM</li>
+  <li>examples:
+    <ul>
+      <li>{@link examples_escript. command line script}</li>
+      <li>{@link examples_cli_handler. gen_indira_cli example}</li>
+      <li>{@link examples_command_handler. gen_indira_command example}</li>
+    </ul>
+  </li>
+</ul>

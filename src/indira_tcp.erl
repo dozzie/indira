@@ -1,9 +1,6 @@
 %%%---------------------------------------------------------------------------
 %%% @doc
-%%%   TCP listener entry point.
-%%%   This listener is implemented as {@link gen_indira_sock_stream} module
-%%%   (listener and connection handler separated). It should be simple enough
-%%%   to serve as an example for your own code, if needed.
+%%%   TCP listener entry point and process.
 %%%
 %%%   == Indira parameter ==
 %%%
@@ -24,34 +21,56 @@
 
 -module(indira_tcp).
 
--behaviour(gen_indira_listener).
+-behaviour(gen_indira_socket).
+-behaviour(gen_server).
 
-%% Indira listener API
+%% supervision tree API
+-export([start_link/2]).
+
+%% gen_indira_socket interface
 -export([child_spec/1]).
 -export([send_one_line/3, retry_send_one_line/3]).
 
+%% gen_server callbacks
+-export([init/1, terminate/2]).
+-export([handle_call/3, handle_cast/2, handle_info/2]).
+-export([code_change/3]).
+
 %%%---------------------------------------------------------------------------
-%%% Indira listener API
+%%% types {{{
+
+-define(TCP_LISTEN_INTERVAL, 100).
+
+-record(state, {
+  socket :: gen_tcp:socket()
+}).
+
+-type address() :: {inet:hostname() | inet:ip_address(), inet:port_number()}.
+
+%%% }}}
 %%%---------------------------------------------------------------------------
+%%% gen_indira_socket interface
+%%%---------------------------------------------------------------------------
+
+%%----------------------------------------------------------
+%% child_spec() {{{
 
 %% @private
-%% @doc Listener description.
+%% @doc Socket listener child spec.
 
-child_spec({_Host,_Port} = BindAddr) ->
-  SockStreamSupArgs = [
-    indira_tcp_listener,
-    {indira_tcp_reader, start_link},
-    BindAddr
-  ],
+child_spec({Host, Port} = _BindAddr) ->
   {ignore,
-    {indira_sock_stream_sup, start_link, SockStreamSupArgs},
-    permanent, 5000, supervisor, [indira_sock_stream_sup]}.
+    {?MODULE, start_link, [Host, Port]},
+    permanent, 5000, worker, [?MODULE]}.
+
+%% }}}
+%%----------------------------------------------------------
+%% send_one_line() {{{
 
 %% @private
 %% @doc Send a line to socket.
 
--spec send_one_line({inet:hostname() | inet:ip_address(), inet:port_number()},
-                    iolist(), timeout()) ->
+-spec send_one_line(address(), iolist(), timeout()) ->
   {ok, iolist()} | {error, term()}.
 
 send_one_line({Addr, Port} = _Address, Line, Timeout) ->
@@ -70,12 +89,14 @@ send_one_line({Addr, Port} = _Address, Line, Timeout) ->
       {error, Reason}
   end.
 
+%% }}}
+%%----------------------------------------------------------
+%% retry_send_one_line() {{{
+
 %% @private
 %% @doc Send a line to socket, retrying when socket refuses connections.
 
--spec retry_send_one_line({inet:hostname() | inet:ip_address(),
-                            inet:port_number()},
-                          iolist(), timeout()) ->
+-spec retry_send_one_line(address(), iolist(), timeout()) ->
   {ok, iolist()} | {error, term()}.
 
 retry_send_one_line(Address, Line, infinity = _Timeout) ->
@@ -88,31 +109,158 @@ retry_send_one_line(Address, Line, infinity = _Timeout) ->
   end;
 
 retry_send_one_line(Address, Line, Timeout) when is_integer(Timeout) ->
-  Timer = gen_indira_listener:setup_timer(Timeout),
+  Timer = gen_indira_socket:setup_timer(Timeout),
   retry_send_one_line_loop(Address, Line, Timeout, Timer).
 
 %% @doc Worker loop for {@link retry_send_one_line/3}.
 
--spec retry_send_one_line_loop({inet:hostname() | inet:ip_address(),
-                                 inet:port_number()},
-                               iolist(), timeout(),
-                               gen_indira_listener:timer()) ->
+-spec retry_send_one_line_loop(address(), iolist(), timeout(),
+                               gen_indira_socket:timer()) ->
   {ok, iolist()} | {error, term()}.
 
 retry_send_one_line_loop(Address, Line, Timeout, Timer) ->
   case send_one_line(Address, Line, Timeout) of
     {ok, Reply} ->
-      gen_indira_listener:cancel_timer(Timer),
+      gen_indira_socket:cancel_timer(Timer),
       {ok, Reply};
     % only keep trying when the host is up and reachable, but refuses
     % connections
     {error, econnrefused} ->
-      case gen_indira_listener:timer_fired(Timer, 100) of
+      case gen_indira_socket:timer_fired(Timer, 100) of
         true -> {error, timeout};
         false -> retry_send_one_line_loop(Address, Line, Timeout, Timer)
       end;
     {error, Reason} ->
       {error, Reason}
+  end.
+
+%% }}}
+%%----------------------------------------------------------
+
+%%%---------------------------------------------------------------------------
+%%% public API for supervision tree
+%%%---------------------------------------------------------------------------
+
+%% @private
+%% @doc Start UDP listener process.
+
+start_link(Host, Port) ->
+  gen_server:start_link(?MODULE, [Host, Port], []).
+
+%%%---------------------------------------------------------------------------
+%%% gen_server callbacks
+%%%---------------------------------------------------------------------------
+
+%%----------------------------------------------------------
+%% initialization/termination {{{
+
+%% @private
+%% @doc Initialize {@link gen_server} state.
+
+init([BindAddr, BindPort] = _Args) ->
+  case listen(BindAddr, BindPort) of
+    {ok, Socket} ->
+      State = #state{socket = Socket},
+      {ok, State, 0};
+    {error, Reason} ->
+      {stop, Reason}
+  end.
+
+%% @private
+%% @doc Clean up {@link gen_server} state.
+
+terminate(_Reason, _State = #state{socket = Socket}) ->
+  gen_tcp:close(Socket),
+  ok.
+
+%% }}}
+%%----------------------------------------------------------
+%% communication {{{
+
+%% @private
+%% @doc Handle {@link gen_server:call/2}.
+
+%% unknown calls
+handle_call(_Request, _From, State) ->
+  {reply, {error, unknown_call}, State, 0}.
+
+%% @private
+%% @doc Handle {@link gen_server:cast/2}.
+
+%% unknown casts
+handle_cast(_Request, State) ->
+  {noreply, State, 0}.
+
+%% @private
+%% @doc Handle incoming messages.
+
+handle_info(timeout = _Message, State = #state{socket = Socket}) ->
+  case gen_tcp:accept(Socket, ?TCP_LISTEN_INTERVAL) of
+    {ok, Client} ->
+      indira_tcp_conn:take_over(Client),
+      {noreply, State, 0};
+    {error, timeout} ->
+      {noreply, State, 0};
+    {error, Reason} ->
+      {stop, {accept, Reason}, State}
+  end;
+
+%% unknown messages
+handle_info(_Message, State) ->
+  {noreply, State, 0}.
+
+%% }}}
+%%----------------------------------------------------------
+%% code change {{{
+
+%% @private
+%% @doc Handle code change.
+
+code_change(_OldVsn, State, _Extra) ->
+  {ok, State}.
+
+%% }}}
+%%----------------------------------------------------------
+
+%%%---------------------------------------------------------------------------
+%%% network helpers
+%%%---------------------------------------------------------------------------
+
+%% @doc Prepare listening {@link gen_tcp} socket.
+%%
+%% @todo IPv6 support
+
+-spec listen(any | inet:hostname() | inet:ip_address(), inet:port_number()) ->
+  {ok, gen_tcp:socket()} | {error, {listen | resolve, term()}}.
+
+listen(Address, Port) ->
+  case bind_options(Address) of
+    {ok, BindOptions} ->
+      Options = [
+        list, {packet, line}, {active, false},
+        {reuseaddr, true}, {keepalive, true} |
+        BindOptions
+      ],
+      case gen_tcp:listen(Port, Options) of
+        {ok, Socket} -> {ok, Socket};
+        {error, Reason} -> {error, {listen, Reason}}
+      end;
+    {error, Reason} ->
+      {error, {resolve, Reason}}
+  end.
+
+%% @doc Resolve DNS address to IP.
+
+-spec bind_options(any | inet:hostname() | inet:ip_address()) ->
+  {ok, [{atom(), term()}]} | {error, term()}.
+
+bind_options(any = _Addr) ->
+  {ok, []};
+bind_options(Addr) ->
+  % TODO: IPv6 (inet6)
+  case inet:getaddr(Addr, inet) of
+    {ok, HostAddr} -> {ok, [{ip, HostAddr}]};
+    {error, Reason} -> {error, Reason}
   end.
 
 %%%---------------------------------------------------------------------------

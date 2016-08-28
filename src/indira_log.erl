@@ -3,29 +3,33 @@
 %%%   Logging for Indira processes with unified messages.
 %%%
 %%%   Events logged with this module are all sent to {@link error_logger}.
+%%%   They will be logged as info/warning/error reports with type
+%%%   {@type @{indira, Type@}} and report being a {@type log_context()} with
+%%%   at least {@type @{message, string()@}} entry.
 %%%
 %%%   This module is intended to be used by programmers writing custom
-%%%   {@link gen_indira_listener} modules.
+%%%   {@link gen_indira_socket} modules.
 %%% @end
 %%%---------------------------------------------------------------------------
 
 -module(indira_log).
 
--export([info/2, error/2, error/3, critical/2, critical/3]).
+%% pre-set context
+-export([set_context/2, get_context/0]).
+-export([info/2, warn/2, crit/2]).
+%% general interface
+-export([info/3, warn/3, crit/3]).
 
--export_type([event/0, context/0, error_reason/0]).
+-export_type([event_type/0, log_context/0]).
 -export_type([error_logger_event/0]).
 
 %%%---------------------------------------------------------------------------
 
--type event() :: atom().
-%% Short description of what event is about.
+-type event_type() :: atom().
+%% Short description of what the event is about. A subsystem or module name
+%% makes a good event type.
 
--type error_reason() :: term().
-%% `Reason' part of a `{error, Reason}' tuple usually returned in case of
-%% errors.
-
--type context() :: [{Key :: atom(), Value :: term()}].
+-type log_context() :: [{Key :: atom(), Value :: term()}].
 %% More informations about the event, including a human-readable message.
 
 -type error_logger_event() ::
@@ -58,77 +62,105 @@
 %% warning).
 
 %%%---------------------------------------------------------------------------
-%%% API
+%%% pre-set context
 %%%---------------------------------------------------------------------------
 
-%% @doc Send info report about an event to {@link error_logger}.
-%%   The report is formatted uniformly for Indira.
+%% @doc Set log context for {@link info/2}, {@link warn/2}, and
+%%   {@link crit/2}.
+%%
+%%   This allows to pre-format and store some information about the process,
+%%   especially for cases when this information wouldn't be available down in
+%%   the call stack if it wasn't for logging.
+%%
+%%   Context is remembered in process dictionary.
+%%
+%% @see get_context/0
 
--spec info(event(), context()) ->
+-spec set_context(event_type(), log_context()) ->
   ok.
 
-info(InfoType, Context) ->
-  error_logger:info_report([{indira_info, InfoType} | Context]).
-
-%% @doc Send error report about an error to {@link error_logger}.
-%%   The report is formatted uniformly for Indira.
-%%
-%%   This function is intended for use with single `{error,Reason}' tuple.
-%%
-%%   Such error is something that generally shouldn't happen, but if it does,
-%%   it has limited scope (e.g. command line parse error for a single client).
-
--spec error(event(), error_reason(), context()) ->
+set_context(Type, Context) when is_atom(Type), is_list(Context) ->
+  put('$indira_log', {Type, Context}),
   ok.
 
-error(ErrorType, ErrorReason, Context) ->
-  error_logger:warning_report(
-    [{indira_error, ErrorType}, {error, ErrorReason} | Context]
-  ).
+%% @doc Read log context set with {@link set_context/2}.
 
-%% @doc Send error report about an error to {@link error_logger}.
-%%   The report is formatted uniformly for Indira.
-%%
-%%   This function is intended for use when no single `{error,Reason}' tuple
-%%   is present (e.g. when multiple errors occurred).
-%%
-%%   Such error is something that generally shouldn't happen, but if it does,
-%%   it has limited scope (e.g. command line parse error for a single client).
+-spec get_context() ->
+  {event_type(), log_context()} | undefined.
 
--spec error(event(), context()) ->
+get_context() ->
+  get('$indira_log').
+
+%% @doc Event of informative significance.
+%%   New client connected, cancelled an order, submitted new job, etc.
+%%
+%%   Uses context and event type set with {@link set_context/2}.
+
+-spec info(string(), log_context()) ->
   ok.
 
-error(ErrorType, Context) ->
-  error_logger:warning_report([{indira_error, ErrorType} | Context]).
+info(Message, Info) when is_list(Info) ->
+  {Type, Context} = get_context(),
+  info(Type, Message, Info ++ Context).
 
-%% @doc Send log report about severe error to {@link error_logger}.
-%%   The report is formatted uniformly for Indira.
+%% @doc Minor error event.
+%%   Typically the error has its cause in some remote entity (e.g. protocol
+%%   error), but it's harmless for the operation of Indira or daemon itself.
 %%
-%%   This function is intended for use with single `{error,Reason}' tuple.
-%%
-%%   For severe errors, like inability to listen on a specified port.
+%%   Uses context and event type set with {@link set_context/2}.
 
--spec critical(event(), error_reason(), context()) ->
+-spec warn(string(), log_context()) ->
   ok.
 
-critical(ErrorType, ErrorReason, Context) ->
-  error_logger:error_report(
-    [{indira_error, ErrorType}, {error, ErrorReason} | Context]
-  ).
+warn(Message, Info) when is_list(Info) ->
+  {Type, Context} = get_context(),
+  warn(Type, Message, Info ++ Context).
 
-%% @doc Send log report about severe error to {@link error_logger}.
-%%   The report is formatted uniformly for Indira.
+%% @doc Major error event.
+%%   An unexpected event that should never occur, possibly threatening service
+%%   operation (or part of it).
 %%
-%%   This function is intended for use when no single `{error,Reason}' tuple
-%%   is present (e.g. when multiple errors occurred).
-%%
-%%   For severe errors, like inability to listen on a specified port.
+%%   Uses context and event type set with {@link set_context/2}.
 
--spec critical(event(), context()) ->
+-spec crit(string(), log_context()) ->
   ok.
 
-critical(ErrorType, Context) ->
-  error_logger:error_report([{indira_error, ErrorType} | Context]).
+crit(Message, Info) when is_list(Info) ->
+  {Type, Context} = get_context(),
+  crit(Type, Message, Info ++ Context).
+
+%%%---------------------------------------------------------------------------
+%%% general interface
+%%%---------------------------------------------------------------------------
+
+%% @doc Event of informative significance.
+%%   New client connected, cancelled an order, submitted new job, etc.
+
+-spec info(event_type(), string(), log_context()) ->
+  ok.
+
+info(Type, Message, Context) when is_atom(Type), is_list(Context) ->
+  error_logger:info_report({indira, Type}, [{message, Message} | Context]).
+
+%% @doc Minor error event.
+%%   Typically the error has its cause in some remote entity (e.g. protocol
+%%   error), but it's harmless for the operation of Indira or daemon itself.
+
+-spec warn(event_type(), string(), log_context()) ->
+  ok.
+
+warn(Type, Message, Context) when is_atom(Type), is_list(Context) ->
+  error_logger:warning_report({indira, Type}, [{message, Message} | Context]).
+
+%% @doc Major error event.
+%%   An unexpected event that should never occur, possibly threatening service
+%%   operation (or part of it).
+
+-spec crit(event_type(), string(), log_context()) ->
+  ok.
+
+crit(Type, Message, Context) when is_atom(Type), is_list(Context) ->
+  error_logger:error_report({indira, Type}, [{message, Message} | Context]).
 
 %%%---------------------------------------------------------------------------
 %%% vim:ft=erlang:foldmethod=marker

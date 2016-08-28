@@ -10,7 +10,7 @@
 -behaviour(supervisor).
 
 %% public interface
--export([spawn_command/2]).
+-export([spawn_worker/1]).
 
 %% supervision tree API
 -export([start_link/0]).
@@ -22,13 +22,10 @@
 %%% public interface
 %%%---------------------------------------------------------------------------
 
-%% @doc Start a new command handler process.
+%% @doc Start a new worker process.
 
--spec spawn_command(indira_json:json_string(), pid() | {pid(), term()}) ->
-  {ok, pid()} | {error, term()}.
-
-spawn_command(Line, ReplyTo) ->
-  supervisor:start_child(?MODULE, [Line, ReplyTo]).
+spawn_worker(Owner) ->
+  supervisor:start_child(?MODULE, [Owner]).
 
 %%%---------------------------------------------------------------------------
 %%% supervision tree API
@@ -66,7 +63,7 @@ init(_Args) ->
 %%   module {@link indira_command_handle_fun}.
 
 -spec command_callback_module() ->
-  {atom(), gen_indira_command:argument()}.
+  {module(), gen_indira_command:argument()}.
 
 command_callback_module() ->
   case application:get_env(command) of

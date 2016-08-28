@@ -1,7 +1,9 @@
 .*.swp
 *.beam
 /ebin/*.app
-/doc
+/doc/edoc-info
+/doc/*.png
+/doc/*.html
+/doc/*.css
 /c_src/*.o
 /priv/*.so
-/priv/syslog_helper
