@@ -178,7 +178,10 @@ set_indira_options([pidfile | Rest] = _Aspects, Options) ->
 set_indira_options([net | Rest] = _Aspects, Options) ->
   NodeName = proplists:get_value(node_name, Options),
   NameType = proplists:get_value(name_type, Options),
-  Cookie = proplists:get_value(cookie, Options, none),
+  Cookie = case proplists:get_value(cookie, Options) of
+    undefined -> none;
+    C -> C
+  end,
   case check_net_config(NodeName, NameType, Cookie) of
     ok ->
       application:set_env(indira, net, {NodeName, NameType, Cookie}),
