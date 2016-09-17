@@ -285,7 +285,7 @@ check_net_config(_NodeName, _NameType, _Cookie) ->
 %%   `{error, {Key, EnvKey, Reason}}'.
 
 -spec set_env(ConfigGet, Validate, config(), [set_spec()]) ->
-  ok | {error, {config_key(), env_key(), term()} | {app_load, term()}}
+  ok | {error, {config_key(), env_key(), term()} | {app_load, term()} | badarg}
   when
     ConfigGet :: fun((config_key(), config()) ->
                        config_value()),
@@ -296,7 +296,7 @@ check_net_config(_NodeName, _NameType, _Cookie) ->
 set_env(ConfigGet, Validate, Config, SetSpecs) ->
   case load_apps(SetSpecs) of
     ok -> set_env_loop(ConfigGet, Validate, Config, SetSpecs);
-    {error, Reason} -> {error, {app_load, Reason}}
+    {error, Reason} -> {error, Reason}
   end.
 
 %% @doc Set application environment from config according to specification.
@@ -395,7 +395,7 @@ should_append(Options) ->
 %% @doc Load applications that will be potentially used in `SetSpecs'.
 
 -spec load_apps([set_spec()]) ->
-  ok | {error, term()}.
+  ok | {error, {app_load, term()} | badarg}.
 
 load_apps([] = _SetSpecs) ->
   ok;
@@ -403,13 +403,13 @@ load_apps([{_Key, {App, _Par}} | RestSpecs] = _SetSpecs) ->
   case application:load(App) of
     ok -> load_apps(RestSpecs);
     {error, {already_loaded, App}} -> load_apps(RestSpecs);
-    {error, Reason} -> {error, Reason}
+    {error, Reason} -> {error, {app_load, Reason}}
   end;
 load_apps([{_Key, {App, _Par}, _Opts} | RestSpecs] = _SetSpecs) ->
   case application:load(App) of
     ok -> load_apps(RestSpecs);
     {error, {already_loaded, App}} -> load_apps(RestSpecs);
-    {error, Reason} -> {error, Reason}
+    {error, Reason} -> {error, {app_load, Reason}}
   end;
 load_apps(_SetSpecs) ->
   {error, badarg}.
