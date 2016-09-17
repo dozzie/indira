@@ -19,6 +19,10 @@
 %% starting/stopping distributed Erlang
 -export([distributed_start/0, distributed_stop/0]).
 
+-export_type([daemon_option/0]).
+-export_type([set_spec/0, set_option/0]).
+-export_type([config/0, config_key/0, config_value/0, env_key/0]).
+
 %%%---------------------------------------------------------------------------
 %%% types {{{
 
