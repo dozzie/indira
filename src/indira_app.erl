@@ -17,7 +17,7 @@
 -export([start_rec/1, start_rec/2, daemonize/2]).
 -export([sleep_forever/0]).
 %% starting/stopping distributed Erlang
--export([distributed_start/0, distributed_stop/0]).
+-export([distributed_start/0, distributed_stop/0, distributed_reconfigure/1]).
 
 -export_type([daemon_option/0]).
 -export_type([set_spec/0, set_option/0]).
@@ -86,6 +86,25 @@ distributed_start() ->
 
 distributed_stop() ->
   indira_dist_erl:tear_down().
+
+%% @doc Reconfigure Erlang networking.
+%%
+%%   If network is up, it's restarted. If it is down, it's left down.
+%%
+%%   Only network-related options are considered. All the others are ignored.
+%%
+%%   <i>NOTE</i>: You can't deconfigure Erlang networking this way.
+%%
+%% @see indira_setup/1
+
+-spec distributed_reconfigure([daemon_option()]) ->
+  ok | {error, invalid_net_config | term()}.
+
+distributed_reconfigure(Options) ->
+  case set_indira_options([net, net_start], Options) of
+    ok -> indira_dist_erl:reconfigure();
+    {error, Reason} -> {error, Reason}
+  end.
 
 %%%---------------------------------------------------------------------------
 %%% setting options

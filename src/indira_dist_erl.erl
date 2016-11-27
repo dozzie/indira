@@ -14,7 +14,7 @@
 -behaviour(gen_server).
 
 %% public interface
--export([bring_up/0, tear_down/0, read_cookie/1]).
+-export([bring_up/0, tear_down/0, reconfigure/0, read_cookie/1]).
 
 %% supervision tree API
 -export([start/0, start_link/0]).
@@ -33,6 +33,8 @@
 -type cookie() :: atom() | {file, file:filename()} | none.
 
 -type net_config() :: {node(), shortnames | longnames, cookie()}.
+
+-define(NETWORK_ALIVE, (node() /= nonode@nohost)).
 
 %%%---------------------------------------------------------------------------
 %%% public interface
@@ -53,6 +55,16 @@ bring_up() ->
 
 tear_down() ->
   gen_server:call(?MODULE, stop).
+
+%% @doc Reconfigure Erlang networking.
+%%
+%%   If network is up, it's restarted. If it is down, it's left down.
+
+-spec reconfigure() ->
+  ok | {error, term()}.
+
+reconfigure() ->
+  gen_server:call(?MODULE, reconfigure).
 
 %% @doc Read a magic cookie from a specified file.
 %%   The cookie is the first line of the file.
@@ -165,6 +177,38 @@ handle_call(stop = _Request, _From, State) ->
       indira_log:info("can't shutdown Erlang networking", [{error, Reason}])
   end,
   {reply, Reply, State};
+
+handle_call(reconfigure = _Request, _From,
+            State = #state{config = NetConfig}) ->
+  case get_network_config() of
+    {_, NetConfig} ->
+      {reply, ok, State};
+
+    {_, NewNetConfig} when not ?NETWORK_ALIVE ->
+      indira_log:info("Erlang networking configuration changed",
+                      [{network, stopped}]),
+      NewState = State#state{config = NewNetConfig},
+      {reply, ok, NewState};
+
+    {_, NewNetConfig} when ?NETWORK_ALIVE ->
+      indira_log:info("Erlang networking configuration changed",
+                      [{network, started}]),
+      case stop_network() of
+        ok ->
+          case start_network(NewNetConfig) of
+            ok = Reply ->
+              ok;
+            {error, Reason} = Reply ->
+              indira_log:info("can't restart Erlang networking",
+                              [{step, start}, {error, Reason}])
+          end;
+        {error, Reason} = Reply ->
+          indira_log:info("can't restart Erlang networking",
+                          [{step, stop}, {error, Reason}])
+      end,
+      NewState = State#state{config = NewNetConfig},
+      {reply, Reply, NewState}
+  end;
 
 %% unknown calls
 handle_call(_Request, _From, State) ->
