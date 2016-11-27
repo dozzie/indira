@@ -301,7 +301,8 @@ check_net_config(_NodeName, _NameType, _Cookie) ->
 %%   Function pre-loads all the (potentially) necessary applications.
 %%
 %%   If `Validate(...)' returns `{error, Reason}', it will be reported as
-%%   `{error, {Key, EnvKey, Reason}}'.
+%%   `{error, {Key, EnvKey, Reason}}' and no value from specifications will be
+%%   set.
 
 -spec set_env(ConfigGet, Validate, config(), [set_spec()]) ->
   ok | {error, {config_key(), env_key(), term()} | {app_load, term()} | badarg}
@@ -314,8 +315,17 @@ check_net_config(_NodeName, _NameType, _Cookie) ->
 
 set_env(ConfigGet, Validate, Config, SetSpecs) ->
   case load_apps(SetSpecs) of
-    ok -> set_env_loop(ConfigGet, Validate, Config, SetSpecs);
-    {error, Reason} -> {error, Reason}
+    ok ->
+      try [parse_spec(ConfigGet, Validate, Config, S) || S <- SetSpecs] of
+        Specs ->
+          lists:foreach(fun set_app_env/1, Specs),
+          ok
+      catch
+        error:{Key, EnvKey, Reason} ->
+          {error, {Key, EnvKey, Reason}}
+      end;
+    {error, Reason} ->
+      {error, Reason}
   end.
 
 %% @doc Set application environment from config according to specification.
@@ -328,29 +338,27 @@ set_env(Validate, Config, SetSpecs) ->
   set_env(fun proplists:get_value/2, Validate, Config, SetSpecs).
 
 %%----------------------------------------------------------
-%% set_env_loop() {{{
+%% parse_spec() {{{
 
-%% @doc Set app environment, worker for {@link set_env/4}.
+%% @doc Extract and validate config options for {@link set_app_env/1}.
+%%
+%%   Validation error raises an error ({@link erlang:error/1}) of form
+%%   {@type @{Key, EnvKey, Reason@}}.
 
-set_env_loop(_ConfigGet, _Validate, _Config, [] = _SetSpecs) ->
-  ok;
-set_env_loop(ConfigGet, Validate, Config, [Spec | RestSpecs] = _SetSpecs) ->
-  case Spec of
-    {Key, EnvKey, SetOpts} -> ok;
-    {Key, EnvKey} -> SetOpts = []
-  end,
+parse_spec(ConfigGet, Validate, Config, {Key, EnvKey} = _Spec) ->
+  parse_spec(ConfigGet, Validate, Config, {Key, EnvKey, []});
+parse_spec(ConfigGet, Validate, Config,
+           {Key, {_App,_Param}= EnvKey, SetOpts} = _Spec) ->
   Value = ConfigGet(Key, Config),
   case Validate(Key, EnvKey, Value) of
     ignore ->
-      set_env_loop(ConfigGet, Validate, Config, RestSpecs);
+      ignore;
     ok ->
-      set_app_env(EnvKey, Value, SetOpts),
-      set_env_loop(ConfigGet, Validate, Config, RestSpecs);
+      {EnvKey, Value, SetOpts};
     {ok, EnvValue} ->
-      set_app_env(EnvKey, EnvValue, SetOpts),
-      set_env_loop(ConfigGet, Validate, Config, RestSpecs);
+      {EnvKey, EnvValue, SetOpts};
     {error, Reason} ->
-      {error, {Key, EnvKey, Reason}}
+      erlang:error({Key, EnvKey, Reason})
   end.
 
 %% }}}
@@ -358,11 +366,16 @@ set_env_loop(ConfigGet, Validate, Config, [Spec | RestSpecs] = _SetSpecs) ->
 %% set_app_env() {{{
 
 %% @doc Set an application parameter to specified value.
+%%
+%%   Function accepts what {@link parse_spec/4} returned.
 
--spec set_app_env(env_key(), term(), [set_option()]) ->
-  ok.
+-spec set_app_env(SetSpec) ->
+  ok
+  when SetSpec :: {env_key(), term(), [set_option()]} | ignore.
 
-set_app_env({App, Param} = _EnvKey, Value, Options) ->
+set_app_env(ignore) ->
+  ok;
+set_app_env({{App, Param} = _EnvKey, Value, Options}) ->
   case should_set(App, Param, Options) of
     true ->
       case should_append(Options) of
