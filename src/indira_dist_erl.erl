@@ -27,8 +27,7 @@
 %%%---------------------------------------------------------------------------
 
 -record(state, {
-  config :: net_config(),
-  initial_status :: started | stopped
+  config :: net_config()
 }).
 
 -type cookie() :: atom() | {file, file:filename()} | none.
@@ -113,8 +112,7 @@ init(_Args) ->
   indira_log:set_context(erlang_networking, []),
   {NetInitialStatus, NetConfig} = get_network_config(),
   State = #state{
-    config = NetConfig,
-    initial_status = NetInitialStatus
+    config = NetConfig
   },
   case NetInitialStatus of
     started ->
