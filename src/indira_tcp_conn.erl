@@ -134,6 +134,11 @@ handle_info({error, Type, Reason} = _Message, State) ->
                   [{error_type, Type}, {error, Reason}]),
   {stop, normal, State};
 
+handle_info({error, Type, Reason, StackTrace} = _Message, State) ->
+  indira_log:warn("command execution error",
+                  [{error_type, Type}, {error, Reason}, {stack, StackTrace}]),
+  {stop, normal, State};
+
 handle_info({tcp, Socket, Line} = _Message,
             State = #state{socket = Socket}) ->
   % XXX: don't set `{active, once}'; wait for reply to arrive

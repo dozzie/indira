@@ -49,8 +49,9 @@ spawn_worker() ->
 %% @doc Execute an incoming command line.
 %%
 %%   Function returns immediately, and the result is later sent as `{result,
-%%   ReplyLine}' to the worker's owner (`{error, exit | error | throw,
-%%   Reason}' in case of handler's death or unserializable result).
+%%   ReplyLine}' to the worker's owner (`{error, throw, Reason}' or `{error,
+%%   exit | error, Reason, StackTrace}' in case of handler's death or
+%%   unserializable result).
 %%
 %%   Worker process exits as soon as it finishes the job.
 
@@ -64,8 +65,8 @@ execute(Pid, CommandLine) ->
 %%
 %%   Function returns immediately, and the result is later sent as `{result,
 %%   RoutingKey, ReplyLine}' to the worker's owner (`{error, RoutingKey,
-%%   exit | error | throw, Reason}' in case of handler's death or
-%%   unserializable result).
+%%   throw, Reason}' or `{error, RoutingKey, exit | error, Reason,
+%%   StackTrace}' in case of handler's death or unserializable result).
 %%
 %%   Worker process exits as soon as it finishes the job.
 
@@ -133,18 +134,28 @@ handle_call(_Request, _From, State) ->
 handle_cast({execute, CommandLine} = _Request,
             State = #state{owner = {Owner, _}}) ->
   case execute_line(CommandLine, State) of
-    {ok, ReplyLine}         -> Owner ! {result, ReplyLine};
-    {error, {Type, Reason}} -> Owner ! {error, Type, Reason};
-    {error, Reason}         -> Owner ! {error, error, Reason}
+    {ok, ReplyLine} ->
+      Owner ! {result, ReplyLine};
+    {error, {throw, Reason}} ->
+      Owner ! {error, throw, Reason};
+    {error, {Type, Reason, StackTrace}} ->
+      Owner ! {error, Type, Reason, StackTrace};
+    {error, Reason} ->
+      Owner ! {error, error, Reason, []}
   end,
   {stop, normal, State};
 
 handle_cast({execute, CommandLine, RoutingKey} = _Request,
             State = #state{owner = {Owner, _}}) ->
   case execute_line(CommandLine, State) of
-    {ok, ReplyLine}         -> Owner ! {result, RoutingKey, ReplyLine};
-    {error, {Type, Reason}} -> Owner ! {error, RoutingKey, Type, Reason};
-    {error, Reason}         -> Owner ! {error, RoutingKey, error, Reason}
+    {ok, ReplyLine} ->
+      Owner ! {result, RoutingKey, ReplyLine};
+    {error, {throw, Reason}} ->
+      Owner ! {error, RoutingKey, throw, Reason};
+    {error, {Type, Reason, StackTrace}} ->
+      Owner ! {error, RoutingKey, Type, Reason, StackTrace};
+    {error, Reason} ->
+      Owner ! {error, RoutingKey, error, Reason, []}
   end,
   {stop, normal, State};
 
@@ -185,7 +196,13 @@ code_change(_OldVsn, State, _Extra) ->
   {ok, iolist()} | {error, Reason}
   when Reason :: bad_request_format
                | bad_reply_format
-               | {throw | error | exit, Reason}.
+               | {throw, term()}
+               | {error | exit, term(), StackTrace},
+       StackTrace :: [StackEntry],
+       StackEntry :: {Mod :: atom(), Fun :: atom(), Arity | Args, Location},
+       Arity :: non_neg_integer(),
+       Args :: [term()],
+       Location :: [{atom(), term()}].
 
 execute_line(CommandLine, _State = #state{module = Module, argument = Arg}) ->
   case indira_json:decode(CommandLine) of
@@ -198,8 +215,8 @@ execute_line(CommandLine, _State = #state{module = Module, argument = Arg}) ->
           end
       catch
         throw:Reason -> {error, {throw, Reason}};
-        error:Reason -> {error, {error, Reason}};
-        exit:Reason  -> {error, {exit,  Reason}}
+        error:Reason -> {error, {error, Reason, erlang:get_stacktrace()}};
+        exit:Reason  -> {error, {exit,  Reason, erlang:get_stacktrace()}}
       end;
     {error, badarg} ->
       {error, bad_request_format}

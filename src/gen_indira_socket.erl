@@ -21,18 +21,21 @@
 %%%
 %%%   Result comes as a message of one of several forms. When `command(Line)'
 %%%   was called, it will be either {@type @{result, ReplyLine :: iolist()@}}
-%%%   or {@type @{error, exit | error | throw, Reason :: term()@}}. When
-%%%   `command(Line, Hint)' was called, it will be {@type @{result, Hint,
-%%%   ReplyLine :: iolist()@}} or {@type @{error, Hint, exit | error | throw,
-%%%   Reason :: term()@}}. `ReplyLine' does not include trailing newline
-%%%   character.
+%%%   {@type @{error, throw, Reason :: term()@}}, or {@type @{error, exit
+%%%   | error, Reason :: term(), StackTrace :: list()@}}. When `command(Line,
+%%%   Hint)' was called, it will be {@type @{result, Hint, ReplyLine ::
+%%%   iolist()@}}, {@type @{error, Hint, throw, Reason :: term()@}}, or
+%%%   {@type @{error, Hint, exit | error | throw, Reason :: term(),
+%%%   StackTrace :: list()@}}. `ReplyLine' does not include trailing newline
+%%%   character. `StackTrace' is a result of {@link erlang:get_stacktrace/0}
+%%%   call.
 %%%
-%%%   The first two messages are intended for cases when each client
+%%%   The first three messages are intended for cases when each client
 %%%   connection is handled by its own process (as do {@link indira_tcp} and
-%%%   {@link indira_unix}). The latter two are handy when a single process is
-%%%   responsible for all the communication on the socket and need some means
-%%%   to tell where to send the reply (e.g. `Hint' can be `{IP,Port}', as
-%%%   {@link indira_udp} does).
+%%%   {@link indira_unix}). The latter three are handy when a single process
+%%%   is responsible for all the communication on the socket and need some
+%%%   means to tell where to send the reply (e.g. `Hint' can be `{IP,Port}',
+%%%   as {@link indira_udp} does).
 %%%
 %%%   To provide uniformly formatted logs, listener should log errors using
 %%%   {@link indira_log:warn/3} (e.g. in case of problems in communication
@@ -138,9 +141,11 @@
 %%   {@type @{result, ReplyLine :: iolist()@}}, with `ReplyLine' <em>not
 %%   including</em> terminating newline character.
 %%
-%%   If the command handler died or returned an unserializable value,
-%%   message {@type @{error, exit | error | throw, Reason :: term()@}} will be
-%%   sent.
+%%   If the command handler died or returned an unserializable value, message
+%%   {@type @{error, throw, Reason :: term()@}} or
+%%   {@type @{error, exit | error, Reason :: term(), StackTrace :: list()@}}
+%%   will be sent (`StackTrace' is documented in {@link
+%%   erlang:get_stacktrace/0}).
 
 -spec command(string() | binary()) ->
   ok.
@@ -157,8 +162,10 @@ command(Line) ->
 %%   being the same as specified in the argument to this function.
 %%
 %%   If the command handler died or returned an unserializable value,
-%%   message {@type @{error, RoutingKey, exit | error | throw, Reason ::
-%%   term()@}} will be sent.
+%%   message {@type @{error, RoutingKey, throw, Reason :: term()@}} or
+%%   {@type @{error, RoutingKey, exit | error, Reason :: term(),
+%%   StackTrace :: list()@}} will be sent (`StackTrace' is documented in
+%%   {@link erlang:get_stacktrace/0}).
 %%
 %%   `RoutingKey' is an additional information to tell apart between multiple
 %%   clients. This call form is only needed when a single process handles

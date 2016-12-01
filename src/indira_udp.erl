@@ -184,9 +184,15 @@ handle_info({result, {IP, Port} = _RoutingHint, Line} = _Message,
 
 handle_info({error, {IP, Port} = _RoutingHint, Type, Reason} = _Message,
             State) ->
-  % TODO: log this event
   indira_log:warn("command execution error",
                   [{error_type, Type}, {error, Reason}, {peer, {IP, Port}}]),
+  {noreply, State};
+
+handle_info({error, {IP, Port} = _RoutingHint, Type, Reason, StackTrace} = _Message,
+            State) ->
+  indira_log:warn("command execution error",
+                  [{error_type, Type}, {error, Reason}, {peer, {IP, Port}},
+                   {stack, StackTrace}]),
   {noreply, State};
 
 %% unknown messages

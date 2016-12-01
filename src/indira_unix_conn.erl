@@ -129,6 +129,11 @@ handle_info({error, Type, Reason} = _Message, State) ->
                   [{error_type, Type}, {error, Reason}]),
   {stop, normal, State};
 
+handle_info({error, Type, Reason, StackTrace} = _Message, State) ->
+  indira_log:warn("command execution error",
+                  [{error_type, Type}, {error, Reason}, {stack, StackTrace}]),
+  {stop, normal, State};
+
 handle_info({unix, Socket, Line} = _Message,
             State = #state{socket = Socket}) ->
   gen_indira_socket:command(Line),
