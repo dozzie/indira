@@ -133,7 +133,7 @@ send_one_command(Module, Address, Command, Options) when is_list(Options) ->
     {ok, Line} ->
       case Module:Function(Address, Line, Timeout) of
         {ok, ReplyLine} ->
-          case indira_json:decode(ReplyLine) of
+          case indira_json:decode(unicode:characters_to_list(ReplyLine)) of
             {ok, Reply} ->
               {ok, Reply};
             {error, badarg} ->

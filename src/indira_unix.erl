@@ -39,6 +39,7 @@
 %%% types {{{
 
 -define(UNIX_LISTEN_INTERVAL, 100).
+-define(MAX_LINE_LENGTH, 1048576). % 1MB
 
 -record(state, {
   socket :: indira_af_unix:server_socket()
@@ -77,9 +78,14 @@ send_one_line(SocketPath, Line, Timeout) ->
     {ok, Sock} ->
       case indira_af_unix:send(Sock, [Line, $\n]) of
         ok ->
-          Result = indira_af_unix:recv(Sock, 0, Timeout),
-          indira_af_unix:close(Sock),
-          Result;
+          try
+            ReplyLine = recv_line(Sock, ?MAX_LINE_LENGTH, Timeout),
+            indira_af_unix:close(Sock),
+            {ok, ReplyLine}
+          catch
+            error:Reason ->
+              {error, Reason}
+          end;
         {error, badarg} ->
           % closed socket; pretend it was "connection reset" error
           indira_af_unix:close(Sock),
@@ -87,6 +93,27 @@ send_one_line(SocketPath, Line, Timeout) ->
       end;
     {error, Reason} ->
       {error, Reason}
+  end.
+
+%% @doc Read a line from a socket.
+%%
+%%   Function raises an {@link erlang:error/1} on read errors.
+
+-spec recv_line(indira_af_unix:connection_socket(), non_neg_integer(),
+                timeout()) ->
+  iolist() | no_return().
+
+recv_line(_Socket, MaxLength, _Timeout) when MaxLength =< 0 ->
+  erlang:error(emsgsize);
+recv_line(Socket, MaxLength, Timeout) ->
+  case indira_af_unix:recv(Socket, MaxLength, Timeout) of
+    {ok, Chunk} ->
+      case binary:last(Chunk) of
+        $\n -> [Chunk];
+        _ -> [Chunk | recv_line(Socket, MaxLength - size(Chunk), Timeout)]
+      end;
+    {error, Reason} ->
+      erlang:error(Reason)
   end.
 
 %% }}}
