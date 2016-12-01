@@ -280,7 +280,8 @@ setopts(_Socket, [_Any | _Rest] = _Options) ->
 close(Socket) when is_port(Socket) ->
   try
     unlink(Socket),
-    port_close(Socket)
+    port_close(Socket),
+    unload_driver()
   catch
     % this could be caused by port already being closed, which is expected for
     % `{active,true}' sockets
@@ -313,12 +314,13 @@ spawn_driver(Type, Address) ->
     listen  -> ?PORT_DRIVER_NAME ++ " l:" ++ Address;
     connect -> ?PORT_DRIVER_NAME ++ " c:" ++ Address
   end,
-  ensure_driver_loaded(),
+  ok = load_driver(),
   try
     Port = open_port({spawn_driver, DriverCommand}, [binary]),
     {ok, Port}
   catch
     error:Reason ->
+      _ = unload_driver(),
       {error, Reason}
   end.
 
@@ -338,15 +340,13 @@ try_accept(Socket) ->
       end
   end.
 
-%% @doc Ensure the port driver library is loaded.
+%%----------------------------------------------------------
 
--spec ensure_driver_loaded() ->
-  ok.
+load_driver() ->
+  erl_ddll:load(code:lib_dir(?APP_NAME, priv), ?PORT_DRIVER_NAME).
 
-ensure_driver_loaded() ->
-  PrivDir = code:lib_dir(?APP_NAME, priv),
-  ok = erl_ddll:load_driver(PrivDir, ?PORT_DRIVER_NAME),
-  ok.
+unload_driver() ->
+  erl_ddll:unload(?PORT_DRIVER_NAME).
 
 %%%---------------------------------------------------------------------------
 %%% vim:ft=erlang:foldmethod=marker
