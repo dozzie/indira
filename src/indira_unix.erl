@@ -131,7 +131,7 @@ retry_send_one_line(SocketPath, Line, infinity = _Timeout) ->
     {ok, Reply} ->
       {ok, Reply};
     {error, enoent} ->
-      % TODO: sleep a little instead of making a tight infinite loop
+      timer:sleep(100), % tight infinite loop unnecessarily consumes CPU time
       retry_send_one_line(SocketPath, Line, infinity);
     {error, Reason} ->
       {error, Reason}
