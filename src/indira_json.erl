@@ -16,6 +16,7 @@
 -module(indira_json).
 
 -export([encode/1, decode/1]).
+-export([format_error/1]).
 
 -export_type([json_string/0, struct/0]).
 -export_type([jhash/0, jarray/0, jscalar/0]).
@@ -87,6 +88,14 @@ decode(Line) when is_list(Line) ->
     {error, {_LineNumber, _LexerModule, _Message}, _} ->
       {error, badarg}
   end.
+
+%% @doc Convert a `Reason' from error tuple into usable error message.
+
+-spec format_error(term()) ->
+  string().
+
+format_error(badarg = _Reason) -> "invalid argument";
+format_error(_Reason) -> "unknown JSON error".
 
 %%%---------------------------------------------------------------------------
 %%% serializer {{{

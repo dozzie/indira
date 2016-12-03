@@ -1,11 +1,11 @@
 %%%---------------------------------------------------------------------------
 %%% @private
 %%% @doc
-%%%   Indira top-level supervisor.
+%%%   Daemon boot operations supervisor.
 %%% @end
 %%%---------------------------------------------------------------------------
 
--module(indira_sup).
+-module(indira_boot_sup).
 
 -behaviour(supervisor).
 
@@ -35,15 +35,15 @@ start_link() ->
 init(_Args) ->
   Strategy = {one_for_one, 5, 10},
   Children = [
-    {indira_boot_sup,
-      {indira_boot_sup, start_link, []},
-      permanent, 5000, supervisor, [indira_boot_sup]},
-    {indira_command_sup,
-      {indira_command_sup, start_link, []},
-      permanent, 5000, supervisor, [indira_command_sup]},
-    {indira_socket_sup,
-      {indira_socket_sup, start_link, []},
-      permanent, 5000, supervisor, [indira_socket_sup]}
+    {indira_chdir,
+      {indira_chdir, start_link, []},
+      temporary, 5000, worker, [indira_chdir]},
+    {indira_pidfile,
+      {indira_pidfile, start_link, []},
+      permanent, 5000, worker, [indira_pidfile]},
+    {indira_dist_erl,
+      {indira_dist_erl, start_link, []},
+      permanent, 5000, worker, [indira_dist_erl]}
   ],
   {ok, {Strategy, Children}}.
 

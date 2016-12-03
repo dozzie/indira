@@ -1,11 +1,11 @@
 %%%---------------------------------------------------------------------------
 %%% @private
 %%% @doc
-%%%   Supervisor for socket listeners.
+%%%   Admin sockets supervisor.
 %%% @end
 %%%---------------------------------------------------------------------------
 
--module(indira_listener_sup).
+-module(indira_socket_sup).
 
 -behaviour(supervisor).
 
@@ -32,24 +32,31 @@ start_link() ->
 %% @private
 %% @doc Initialize supervisor.
 
-init([] = _Args) ->
+init(_Args) ->
   Strategy = {one_for_one, 5, 10},
-  Children = case application:get_env(indira, listen) of
-    undefined       -> []; % TODO: indicate error?
-    {ok, Listeners} -> [child_spec(Module, Arg) || {Module, Arg} <- Listeners]
-  end,
+  ConnWorkersSupervisors = [
+    {indira_tcp_conn_sup,
+      {indira_tcp_conn_sup, start_link, []},
+      permanent, 5000, supervisor, [indira_tcp_conn_sup]},
+    {indira_unix_conn_sup,
+      {indira_unix_conn_sup, start_link, []},
+      permanent, 5000, supervisor, [indira_unix_conn_sup]}
+  ],
+  {ok, ListenSpecs} = application:get_env(listen),
+  SocketWorkers = [child_spec(Mod, Addr) || {Mod, Addr} <- ListenSpecs],
+  Children = ConnWorkersSupervisors ++ SocketWorkers,
   {ok, {Strategy, Children}}.
 
-%% @doc Helper to retrieve child specification from {@link
-%%   gen_indira_listener} module.
+%%%---------------------------------------------------------------------------
+
+%% @doc Make a child specification from a listen specification.
 
 -spec child_spec(module(), term()) ->
   supervisor:child_spec().
 
-child_spec(Module, Arg) ->
-  {_Id, {_,_,_} = MFA, _Restart, Shutdown, Type, Modules} =
-    Module:child_spec(Arg),
-  {make_ref(), MFA, permanent, Shutdown, Type, Modules}.
+child_spec(Module, Addr) when is_atom(Module) ->
+  {_Id, MFA, _Restart, Shutdown, Type, Modules} = Module:child_spec(Addr),
+  {{Module, Addr}, MFA, permanent, Shutdown, Type, Modules}.
 
 %%%---------------------------------------------------------------------------
 %%% vim:ft=erlang:foldmethod=marker

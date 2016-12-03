@@ -1,33 +1,41 @@
 %%%---------------------------------------------------------------------------
 %%% @private
 %%% @doc
-%%%   Supervisor that watches over connection handler processes.
+%%%   AF_UNIX connection handlers supervisor.
 %%% @end
 %%%---------------------------------------------------------------------------
 
--module(indira_sock_stream_connection_sup).
+-module(indira_unix_conn_sup).
 
 -behaviour(supervisor).
 
--export([start_link/1]).
+%% public interface
+-export([spawn_worker/1]).
+
+%% supervision tree API
+-export([start_link/0]).
 
 %% supervisor callbacks
 -export([init/1]).
 
 %%%---------------------------------------------------------------------------
-%%% public API
+%%% public interface
+%%%---------------------------------------------------------------------------
+
+%% @doc Start a new worker process.
+
+spawn_worker(Socket) ->
+  supervisor:start_child(?MODULE, [Socket]).
+
+%%%---------------------------------------------------------------------------
+%%% supervision tree API
 %%%---------------------------------------------------------------------------
 
 %% @private
 %% @doc Start the supervisor process.
-%%
-%%   `ConnHandler' is expected to have function name explicit.
 
--spec start_link(gen_indira_sock_stream:connection_handler()) ->
-  {ok, pid()} | {error, term()}.
-
-start_link(ConnHandler) ->
-  supervisor:start_link(?MODULE, ConnHandler).
+start_link() ->
+  supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 %%%---------------------------------------------------------------------------
 %%% supervisor callbacks
@@ -36,13 +44,12 @@ start_link(ConnHandler) ->
 %% @private
 %% @doc Initialize supervisor.
 
-init({Module, Function} = _ConnHandler) ->
-  put(indira_stream_handler, {Module, Function}),
+init(_Args) ->
   Strategy = {simple_one_for_one, 5, 10},
   Children = [
     {undefined,
-      {Module, Function, []},
-      temporary, 5000, worker, [Module]}
+      {indira_unix_conn, start_link, []},
+      temporary, 5000, worker, [indira_unix_conn]}
   ],
   {ok, {Strategy, Children}}.
 

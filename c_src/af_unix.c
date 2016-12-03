@@ -211,14 +211,18 @@ ErlDrvData unix_sock_driver_start(ErlDrvPort port, char *cmd)
     address += 2; // "l:/some/where.sock"
     context->type = entry_server;
 
-    if (setup_server_socket(context, address, strlen(address)) < 0)
+    if (setup_server_socket(context, address, strlen(address)) < 0) {
+      driver_free(context);
       return ERL_DRV_ERROR_ERRNO;
+    }
   } else if (address[0] == 'c') { // client socket
     address += 2; // "c:/some/where.sock"
     context->type = entry_client;
 
-    if (setup_client_socket(context, address, strlen(address)) < 0)
+    if (setup_client_socket(context, address, strlen(address)) < 0) {
+      driver_free(context);
       return ERL_DRV_ERROR_ERRNO;
+    }
   }
 
   return (ErlDrvData)context;

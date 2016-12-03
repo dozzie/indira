@@ -1,0 +1,41 @@
+blockdiag {
+  orientation = portrait;
+  default_shape = roundedbox;
+
+  node_width = 100;
+  span_width = 20;
+
+  indira_sup -> indira_boot_sup;
+  indira_sup -> indira_command_sup;
+  indira_sup -> indira_socket_sup;
+
+  indira_boot_sup -> indira_chdir;
+  indira_boot_sup -> indira_dist_erl;
+  indira_boot_sup -> indira_pidfile;
+
+  indira_command_sup -> indira_command;
+
+  indira_socket_sup -> indira_tcp_conn_sup;
+  indira_socket_sup -> indira_unix_conn_sup;
+  indira_socket_sup -> indira_udp;
+  indira_socket_sup -> indira_tcp;
+  indira_socket_sup -> indira_unix;
+
+  indira_tcp_conn_sup -> indira_tcp_conn;
+  indira_unix_conn_sup -> indira_unix_conn;
+
+  indira_tcp  [stacked];
+  indira_udp  [stacked];
+  indira_unix [stacked];
+  indira_tcp_conn  [stacked];
+  indira_unix_conn [stacked];
+  indira_command   [stacked];
+
+  indira_command_sup    [width = 140];
+  indira_command        [width = 120];
+  indira_socket_sup     [width = 120];
+  indira_tcp_conn_sup   [width = 120];
+  indira_unix_conn_sup  [width = 128];
+}
+
+// vim:ft=dot

@@ -5,35 +5,32 @@
 #DIALYZER_PLT = ~/.dialyzer_plt
 DIALYZER_OPTS = --no_check_plt $(foreach D,$(DIALYZER_PLT),--plt $D)
 
+DIAGRAMS = $(basename $(notdir $(wildcard diagrams/*.diag)))
+DIAGRAMS_SVG = $(foreach D,$(DIAGRAMS),doc/images/$D.svg)
+
 #-----------------------------------------------------------------------------
 
-.PHONY: all doc edoc compile build dialyzer
+.PHONY: all doc edoc diagrams compile build clean dialyzer
 
 all: compile doc
 
-doc edoc:
-	rebar doc
+build: compile
+edoc: doc
+doc: diagrams
 
-compile build:
-	rebar compile
+compile clean doc:
+	rebar $@
+
+diagrams: $(DIAGRAMS_SVG)
+
+doc/images/%.svg: diagrams/%.diag
+	blockdiag -o $@ -T svg $<
 
 YECC_ERL_FILES = $(subst .yrl,.erl,$(subst .xrl,.erl,$(wildcard src/*.[xy]rl)))
 ERL_SOURCE_FILES = $(filter-out $(YECC_ERL_FILES),$(wildcard src/*.erl))
 dialyzer:
 	@echo "dialyzer $(strip $(DIALYZER_OPTS)) --src src/*.erl"
 	@dialyzer $(strip $(DIALYZER_OPTS)) --src $(ERL_SOURCE_FILES)
-
-#-----------------------------------------------------------------------------
-
-#srpm: VERSION=$(shell awk '$$1 == "%define" && $$2 == "_version" {print $$3}' redhat/*.spec)
-#srpm: PKGNAME=erlang-indira
-#srpm:
-#	rm -rf rpm-build
-#	mkdir -p rpm-build/rpm/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-#	git archive --format=tar --prefix=$(PKGNAME)-$(VERSION)/ HEAD | gzip -9 > rpm-build/rpm/SOURCES/$(PKGNAME)-$(VERSION).tar.gz
-#	rpmbuild --define="%_usrsrc $$PWD/rpm-build" --define="%_topdir %{_usrsrc}/rpm" -bs redhat/*.spec
-#	mv rpm-build/rpm/SRPMS/$(PKGNAME)-*.src.rpm .
-#	rm -r rpm-build
 
 #-----------------------------------------------------------------------------
 # vim:ft=make

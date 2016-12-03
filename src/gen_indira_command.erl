@@ -22,7 +22,7 @@
 %%%
 %%%   <ul>
 %%%     <li>`handle_command(Command, Arg) -> Response' -- handle a command
-%%%         received through one of {@link gen_indira_listener} channels:
+%%%         received through one of {@link gen_indira_socket} channels:
 %%%       <ul>
 %%%         <li>`Command' ({@type command()}) -- command to be handled</li>
 %%%         <li>`Arg' ({@type argument()}) -- an arbitrary hint specified by
@@ -83,12 +83,13 @@
 %%%   <ul>
 %%%     <li><i>stop</i>, shutdown the daemon (usually called from
 %%%         initscript) (see {@link init:stop/0})</li>
-%%%     <li><i>is daemon running?</i>, wait for daemon to start
-%%%         (called from initscript)</li>
+%%%     <li><i>status</i>, check if the daemon is running, with an option to
+%%%         wait for boot process to finish (called from initscript)</li>
 %%%     <li><i>reload</i>, reload configuration stored in a file</li>
 %%%     <li><i>netconfig</i>, setup distributed Erlang (epmd, cookie and
 %%%         <i>-(s)name</i>), so an administrator can get shell and debug
-%%%         daemon's internals (see {@link indira:distributed_start/0})</li>
+%%%         daemon's internals (see {@link
+%%%         indira_app:distributed_start/0})</li>
 %%%     <li><i>increase/decrease logging level</i>, for administrator to
 %%%         diagnose operations without resorting to tracing Erlang</li>
 %%%   </ul>
@@ -104,10 +105,10 @@
 -export_type([command/0, command_response/0, argument/0]).
 
 %%%---------------------------------------------------------------------------
-%%% types
+%%% types {{{
 
 -type command() :: indira_json:struct().
-%% Command received from one of the {@link gen_indira_listener} channels.
+%% Command received from one of the {@link gen_indira_socket} channels.
 
 -type command_response() :: indira_json:struct().
 %% Response to a {@type command()}.
@@ -115,6 +116,7 @@
 -type argument() :: term().
 %% An arbitrary hint to `handle_command/2' function.
 
+%%% }}}
 %%%---------------------------------------------------------------------------
 
 -callback handle_command(Command :: command(), Arg :: argument()) ->

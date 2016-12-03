@@ -1,6 +1,7 @@
 %%%---------------------------------------------------------------------------
 %%% @doc
-%%%   Module for working with AF_UNIX connections.
+%%%   AF_UNIX sockets.
+%%%
 %%%   The module mimics {@link gen_tcp} behaviour.
 %%%
 %%%   Active socket sends:
@@ -15,10 +16,10 @@
 %%%   <em>is not suitable</em> for heavy data load. For administrative
 %%%   purposes it should be good enough, though.
 %%%
-%%% @TODO Rewrite recv(), because it's fugly.
-%%% @TODO Add `{active, once}' option
-%%% @TODO Add `list' option.
-%%% @TODO Add `{packet, X}' option.
+%%% @todo Rewrite recv(), because it's fugly.
+%%% @todo Add `{active, once}' option
+%%% @todo Add `list' option.
+%%% @todo Add `{packet, X}' option.
 %%% @end
 %%%---------------------------------------------------------------------------
 
@@ -31,8 +32,9 @@
 -export([controlling_process/2, setopts/2]).
 %% common to server and connection sockets
 -export([close/1]).
+-export([format_error/1]).
 
--export_type([socket/0]).
+-export_type([address/0, socket/0, server_socket/0, connection_socket/0]).
 
 %%%---------------------------------------------------------------------------
 
@@ -47,6 +49,9 @@
 -define(PORT_COMMAND_SET_PASSIVE,     137).
 
 %%%---------------------------------------------------------------------------
+
+-type address() :: file:filename().
+%% Socket address.
 
 -type socket() :: port().
 %% Socket handle.
@@ -67,10 +72,12 @@
 
 %% @doc Setup a socket listening on specified address.
 
--spec listen(string()) ->
+-spec listen(address()) ->
   {ok, server_socket()} | {error, inet:posix()}.
 
-listen(Address) ->
+listen(Address) when is_binary(Address) ->
+  listen(binary_to_list(Address));
+listen(Address) when is_list(Address) ->
   spawn_driver(listen, Address).
 
 %% @doc Accept a client connection.
@@ -130,10 +137,12 @@ accept(Socket, Timeout) when Timeout > ?LOOP_INTERVAL ->
 %%   This function allows to send to datagram sockets as well, but
 %%   {@link recv/2} and {@link recv/3} won't work on such socket.
 
--spec connect(string(), [option()]) ->
+-spec connect(address(), [option()]) ->
   {ok, connection_socket()} | {error, badarg | inet:posix()}.
 
-connect(Address, Opts) ->
+connect(Address, Opts) when is_binary(Address) ->
+  connect(binary_to_list(Address), Opts);
+connect(Address, Opts) when is_list(Address) ->
   case spawn_driver(connect, Address) of
     {ok, Socket} ->
       case setopts(Socket, Opts) of
@@ -271,13 +280,25 @@ setopts(_Socket, [_Any | _Rest] = _Options) ->
 close(Socket) when is_port(Socket) ->
   try
     unlink(Socket),
-    port_close(Socket)
+    port_close(Socket),
+    unload_driver()
   catch
     % this could be caused by port already being closed, which is expected for
     % `{active,true}' sockets
     error:badarg -> ignore
   end,
   ok.
+
+%% @doc Convert a `Reason' from error tuple into usable error message.
+
+-spec format_error(term()) ->
+  string().
+
+format_error(badarg    = _Reason) -> "invalid argument";
+format_error(timeout   = _Reason) -> "operation timed out";
+format_error(closed    = _Reason) -> "connection is closed";
+format_error(not_owner = _Reason) -> "not the owner of the socket";
+format_error(Reason) -> inet:format_error(Reason).
 
 %%%---------------------------------------------------------------------------
 %%% private helpers
@@ -293,12 +314,13 @@ spawn_driver(Type, Address) ->
     listen  -> ?PORT_DRIVER_NAME ++ " l:" ++ Address;
     connect -> ?PORT_DRIVER_NAME ++ " c:" ++ Address
   end,
-  ensure_driver_loaded(),
+  ok = load_driver(),
   try
     Port = open_port({spawn_driver, DriverCommand}, [binary]),
     {ok, Port}
   catch
     error:Reason ->
+      _ = unload_driver(),
       {error, Reason}
   end.
 
@@ -318,15 +340,13 @@ try_accept(Socket) ->
       end
   end.
 
-%% @doc Ensure the port driver library is loaded.
+%%----------------------------------------------------------
 
--spec ensure_driver_loaded() ->
-  ok.
+load_driver() ->
+  erl_ddll:load(code:lib_dir(?APP_NAME, priv), ?PORT_DRIVER_NAME).
 
-ensure_driver_loaded() ->
-  PrivDir = code:lib_dir(?APP_NAME, priv),
-  ok = erl_ddll:load_driver(PrivDir, ?PORT_DRIVER_NAME),
-  ok.
+unload_driver() ->
+  erl_ddll:unload(?PORT_DRIVER_NAME).
 
 %%%---------------------------------------------------------------------------
 %%% vim:ft=erlang:foldmethod=marker

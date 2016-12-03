@@ -19,18 +19,28 @@
 %%%   Listener is not involved with serialization or deserialization of
 %%%   messages in any way.
 %%%
-%%%   Result comes as a message of form either
-%%%   {@type @{result, ReplyLine :: iolist()@}} (when `command(Line)' was
-%%%   called) or {@type @{result, Hint :: term(), ReplyLine :: iolist()@}}
-%%%   (when `command(Hint, Line)' was called). The latter case is intended for
-%%%   cases when a single process is responsible for communication with all
-%%%   the clients, and `Hint' allows to determine to which client send the
-%%%   `ReplyLine'.
+%%%   Result comes as a message of one of several forms. When `command(Line)'
+%%%   was called, it will be either {@type @{result, ReplyLine :: iolist()@}}
+%%%   {@type @{error, throw, Reason :: term()@}}, or {@type @{error, exit
+%%%   | error, Reason :: term(), StackTrace :: list()@}}. When `command(Line,
+%%%   Hint)' was called, it will be {@type @{result, Hint, ReplyLine ::
+%%%   iolist()@}}, {@type @{error, Hint, throw, Reason :: term()@}}, or
+%%%   {@type @{error, Hint, exit | error | throw, Reason :: term(),
+%%%   StackTrace :: list()@}}. `ReplyLine' does not include trailing newline
+%%%   character. `StackTrace' is a result of {@link erlang:get_stacktrace/0}
+%%%   call.
+%%%
+%%%   The first three messages are intended for cases when each client
+%%%   connection is handled by its own process (as do {@link indira_tcp} and
+%%%   {@link indira_unix}). The latter three are handy when a single process
+%%%   is responsible for all the communication on the socket and need some
+%%%   means to tell where to send the reply (e.g. `Hint' can be `{IP,Port}',
+%%%   as {@link indira_udp} does).
 %%%
 %%%   To provide uniformly formatted logs, listener should log errors using
-%%%   {@link indira_log:error/3} (e.g. in case of problems in communication
-%%%   with client) or {@link indira_log:critical/3} (e.g. in case of socket
-%%%   setup error).
+%%%   {@link indira_log:warn/3} (e.g. in case of problems in communication
+%%%   with client) or {@link indira_log:crit/3} (e.g. in case of socket setup
+%%%   error).
 %%%
 %%%   == Entry point module API ==
 %%%
@@ -38,50 +48,39 @@
 %%%   exported:
 %%%
 %%%   <ul>
-%%%     <li>`child_spec(ListenAddress) -> ChildSpec' -- return the root of
-%%%           supervision (sub)tree that accepts connections on
-%%%           `ListenAddress'
-%%%       <ul>
-%%%         <li>`ListenAddress' ({@type term()}) -- an arbitrary term that
-%%%             describes address to accept client connections; the same term
-%%%             as passed in environment specification</li>
-%%%         <li>`ChildSpec' ({@type supervisor:child_spec()}) -- supervision
-%%%             specification of top-level process for this tree (may be
-%%%             a single worker, like {@link indira_udp} does, or a whole
-%%%             supervisor, similar to {@link indira_tcp} or {@link
-%%%             indira_unix})</li>
-%%%       </ul>
+%%%     <li>`child_spec(Address)' -- how to start a listener process to accept
+%%%         connections on {@type Address :: listen_address()}; function
+%%%         should return {@type supervisor:child_spec()}
 %%%     </li>
-%%%     <li>`send_one_line(Address, Line, Timeout) -> {ok, ReplyLine} | {error, Reason}'
+%%%     <li>`send_one_line(Address, Line, Timeout)' -- send a line to an
+%%%         administrative socket; function should return `{ok, ReplyLine ::
+%%%         iolist()}' (`ReplyLine' may include trailing newline) or `{error,
+%%%         term()}'
 %%%       <ul>
-%%%         <li>`Address' ({@type term()}) -- address to send command to</li>
+%%%         <li>`Address' ({@type connect_address()}) -- address to send
+%%%             command to</li>
 %%%         <li>`Line' ({@type iolist()}) -- line with serialized command
 %%%             (trailing newline <em>not included</em>)</li>
 %%%         <li>`Timeout' ({@type timeout()}) -- how long to wait for reply
 %%%             (milliseconds or `infinity')</li>
-%%%         <li>`ReplyLine' ({@type iolist()}) -- line with the reply to
-%%%             command (will be deserialized by `send_one_line()' caller);
-%%%             may, but doesn't need to, include trailing newline</li>
-%%%         <li>`Reason' ({@type term()}) -- error description</li>
 %%%       </ul>
 %%%     </li>
-%%%     <li>`retry_send_one_line(Address, Line, Timeout) -> {ok, ReplyLine} | {error, Reason}'
+%%%     <li>`retry_send_one_line(Address, Line, Timeout)' -- send a line to an
+%%%         administrative socket, retrying when connection was refused;
+%%%         function should return `{ok, ReplyLine :: iolist()}' (`ReplyLine'
+%%%         may include trailing newline) or `{error, term()}'
 %%%       <ul>
-%%%         <li>`Address' ({@type term()}) -- address to send command to</li>
+%%%         <li>`Address' ({@type connect_address()}) -- address to send
+%%%             command to</li>
 %%%         <li>`Line' ({@type iolist()}) -- line with serialized command
 %%%             (trailing newline <em>not included</em>)</li>
 %%%         <li>`Timeout' ({@type timeout()}) -- how long to wait for reply
 %%%             (milliseconds or `infinity')</li>
-%%%         <li>`ReplyLine' ({@type iolist()}) -- line with the reply to
-%%%             command (will be deserialized by `retry_send_one_line()'
-%%%             caller); may, but doesn't need to, include trailing
-%%%             newline</li>
-%%%         <li>`Reason' ({@type term()}) -- error description</li>
 %%%       </ul>
 %%%     </li>
 %%%   </ul>
 %%%
-%%%   Several fields of what `child_spec(Addr)' returns are ignored. Assuming
+%%%   Some fields of what `child_spec(Address)' returns are ignored. Assuming
 %%%   that the result ({@type supervisor:child_spec()}) is matched against
 %%%   tuple `{Id, MFA, Restart, Shutdown, Type, Modules}':
 %%%   <ul>
@@ -95,86 +94,92 @@
 %%%         `dynamic'</li>
 %%%   </ul>
 %%%
-%%%   Typically, for module `foo' it could be:
-%%%   <ul>
-%%%     <li>`{ignore, {foo, start_link, []}, permanent, 5000, worker, [foo]}'
-%%%         for `foo:start_link/0' that runs worker</li>
-%%%     <li>`{ignore, {foo_sup, start_link, []}, permanent, 5000, supervisor,
-%%%         [foo_sup]}' for `foo_sup:start_link/0' that runs whole supervision
-%%%         tree</li>
-%%%   </ul>
-%%%
 %%% @see indira_log
 %%% @end
 %%%---------------------------------------------------------------------------
 
--module(gen_indira_listener).
+-module(gen_indira_socket).
 
 %% sending commands to router
 -export([command/1, command/2]).
-%% timer handling
+%% timers
 -export([setup_timer/1, cancel_timer/1, timer_fired/2]).
 
+-export_type([address/0, listen_address/0, connect_address/0]).
 -export_type([timer/0]).
 
 %%%---------------------------------------------------------------------------
 
 -type timer() :: {reference(), reference()}.
-%% Handle to a timer created with {@link setup_timer/1}.
+
+-type address() :: term().
+
+-type listen_address() :: address().
+
+-type connect_address() :: address().
 
 %%%---------------------------------------------------------------------------
 
--callback child_spec(ListenAddress :: term()) ->
+-callback child_spec(Address :: listen_address()) ->
   supervisor:child_spec().
 
--callback send_one_line(Address :: term(), Line :: iolist(),
+-callback send_one_line(Address :: connect_address(), Line :: iolist(),
                         Timeout :: timeout()) ->
   {ok, ReplyLine :: iolist()} | {error, term()}.
 
--callback retry_send_one_line(Address :: term(), Line :: iolist(),
+-callback retry_send_one_line(Address :: connect_address(), Line :: iolist(),
                               Timeout :: timeout()) ->
   {ok, ReplyLine :: iolist()} | {error, term()}.
 
 %%%---------------------------------------------------------------------------
-%%% sending commands to router
+%%% executing commands
 %%%---------------------------------------------------------------------------
 
-%% @doc Send command to Indira router.
+%% @doc Spawn a command execution process.
 %%
 %%   Calling process will later receive a message
 %%   {@type @{result, ReplyLine :: iolist()@}}, with `ReplyLine' <em>not
 %%   including</em> terminating newline character.
 %%
-%%   This function is intended to be called from {@link gen_indira_listener}
-%%   supervision tree.
+%%   If the command handler died or returned an unserializable value, message
+%%   {@type @{error, throw, Reason :: term()@}} or
+%%   {@type @{error, exit | error, Reason :: term(), StackTrace :: list()@}}
+%%   will be sent (`StackTrace' is documented in {@link
+%%   erlang:get_stacktrace/0}).
 
 -spec command(string() | binary()) ->
   ok.
 
 command(Line) ->
-  indira_commander:command(Line).
+  {ok, Pid} = indira_command:spawn_worker(),
+  indira_command:execute(Pid, Line).
 
-%% @doc Send command to Indira router.
-%%   The process calling this function will get the response as a message.
+%% @doc Spawn a command execution process.
 %%
 %%   Calling process will later receive a message
 %%   {@type @{result, RoutingKey, ReplyLine :: iolist()@}}, with `ReplyLine'
 %%   <em>not including</em> terminating newline character, and `RoutingKey'
 %%   being the same as specified in the argument to this function.
 %%
+%%   If the command handler died or returned an unserializable value,
+%%   message {@type @{error, RoutingKey, throw, Reason :: term()@}} or
+%%   {@type @{error, RoutingKey, exit | error, Reason :: term(),
+%%   StackTrace :: list()@}} will be sent (`StackTrace' is documented in
+%%   {@link erlang:get_stacktrace/0}).
+%%
 %%   `RoutingKey' is an additional information to tell apart between multiple
 %%   clients. This call form is only needed when a single process handles
-%%   multiple clients.
-%%
-%%   This function is intended to be called from {@link gen_indira_listener}
-%%   supervision tree.
+%%   multiple clients, like {@link indira_udp} does.
 
--spec command(term(), string() | binary()) ->
+-spec command(string() | binary(), term()) ->
   ok.
 
-command(RoutingKey, Line) ->
-  indira_commander:command(RoutingKey, Line).
+command(Line, RoutingKey) ->
+  {ok, Pid} = indira_command:spawn_worker(),
+  indira_command:execute(Pid, Line, RoutingKey).
 
+%%%---------------------------------------------------------------------------
+%%% timers (for implementing retry_send_one_line())
 %%%---------------------------------------------------------------------------
 
 %% @doc Setup a timer to fire after `Timeout' milliseconds.

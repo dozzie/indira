@@ -1,14 +1,14 @@
 %%%---------------------------------------------------------------------------
 %%% @doc
-%%%   UDP listener (entry point and actual worker).
+%%%   UDP listener entry point and worker process.
 %%%
 %%%   == Indira parameter ==
 %%%
 %%%   This module expects a tuple `{Host,Port}' as a parameter (see
 %%%   {@link indira}). The `Host' part can be:
 %%%   <ul>
-%%%     <li>`string()'</li>
-%%%     <li>`inet:ip_address()' (i.e. `{N1,N2,N3,N4}' for IPv4)</li>
+%%%     <li>{@type inet:hostname()}</li>
+%%%     <li>{@type inet:ip_address()} (i.e. `{N1,N2,N3,N4}' for IPv4)</li>
 %%%     <li>`` 'any' '' to indicate no binding to any particular interface</li>
 %%%   </ul>
 %%%
@@ -21,12 +21,13 @@
 
 -module(indira_udp).
 
--behaviour(gen_indira_listener).
+-behaviour(gen_indira_socket).
 -behaviour(gen_server).
 
-%%%---------------------------------------------------------------------------
+%% supervision tree API
+-export([start_link/2]).
 
-%% Indira listener API
+%% gen_indira_socket interface
 -export([child_spec/1]).
 -export([send_one_line/3, retry_send_one_line/3]).
 
@@ -35,32 +36,39 @@
 -export([handle_call/3, handle_cast/2, handle_info/2]).
 -export([code_change/3]).
 
-%% API for supervision tree
--export([start_link/2]).
+%%%---------------------------------------------------------------------------
+%%% types {{{
 
+-record(state, {
+  socket :: gen_udp:socket()
+}).
+
+-type address() :: {inet:hostname() | inet:ip_address(), inet:port_number()}.
+
+%%% }}}
+%%%---------------------------------------------------------------------------
+%%% gen_indira_socket interface
 %%%---------------------------------------------------------------------------
 
--include_lib("kernel/include/inet.hrl").
-
--record(state, {socket}).
-
-%%%---------------------------------------------------------------------------
-%%% Indira listener API
-%%%---------------------------------------------------------------------------
+%%----------------------------------------------------------
+%% child_spec() {{{
 
 %% @private
-%% @doc Listener description.
+%% @doc Socket listener child spec.
 
-child_spec({Host, Port} = _Args) ->
+child_spec({Host, Port} = _BindAddr) ->
   {ignore,
     {?MODULE, start_link, [Host, Port]},
     permanent, 5000, worker, [?MODULE]}.
 
+%% }}}
+%%----------------------------------------------------------
+%% send_one_line() {{{
+
 %% @private
 %% @doc Send a line to socket.
 
--spec send_one_line({inet:hostname() | inet:ip_address(), inet:port_number()},
-                    iolist(), timeout()) ->
+-spec send_one_line(address(), iolist(), timeout()) ->
   {ok, iolist()} | {error, term()}.
 
 send_one_line({Addr, Port} = _Address, Line, Timeout) ->
@@ -86,13 +94,23 @@ send_one_line({Addr, Port} = _Address, Line, Timeout) ->
       {error, Reason}
   end.
 
+%% }}}
+%%----------------------------------------------------------
+%% retry_send_one_line() {{{
+
 %% @private
 %% @doc Send a line to socket, retrying when socket refuses connections.
 %%   Hell, it's UDP. It doesn't refuse connections in any reliable way, so
 %%   just do the same as {@link send_one_line/3}.
 
+-spec retry_send_one_line(address(), iolist(), timeout()) ->
+  {ok, iolist()} | {error, term()}.
+
 retry_send_one_line(Address, Line, Timeout) ->
   send_one_line(Address, Line, Timeout).
+
+%% }}}
+%%----------------------------------------------------------
 
 %%%---------------------------------------------------------------------------
 %%% public API for supervision tree
@@ -105,28 +123,27 @@ start_link(Host, Port) ->
   gen_server:start_link(?MODULE, [Host, Port], []).
 
 %%%---------------------------------------------------------------------------
-%%% connection acceptor
+%%% gen_server callbacks
 %%%---------------------------------------------------------------------------
 
 %%----------------------------------------------------------
-%% initialization and termination {{{
+%% initialization/termination {{{
 
 %% @private
 %% @doc Initialize {@link gen_server} state.
-%%   This includes creating listening UDP socket.
 
-init([Host, Port] = _Args) ->
-  % create listening socket
-  BindOpt = address_to_bind_option(Host),
-  {ok, Socket} = gen_udp:open(Port, BindOpt ++ [
-    {active, true}, {reuseaddr, true}, list
-  ]),
-  State = #state{socket = Socket},
-  {ok, State}.
+init([BindAddr, BindPort] = _Args) ->
+  case listen(BindAddr, BindPort) of
+    {ok, Socket} ->
+      indira_log:set_context(udp, [{local, {BindAddr, BindPort}}]),
+      State = #state{socket = Socket},
+      {ok, State};
+    {error, Reason} ->
+      {stop, Reason}
+  end.
 
 %% @private
 %% @doc Clean up {@link gen_server} state.
-%%   This includes closing the listening socket.
 
 terminate(_Reason, _State = #state{socket = Socket}) ->
   gen_udp:close(Socket),
@@ -139,33 +156,48 @@ terminate(_Reason, _State = #state{socket = Socket}) ->
 %% @private
 %% @doc Handle {@link gen_server:call/2}.
 
-handle_call(stop = _Request, _From, State) ->
-  {stop, normal, ok, State};
+%% unknown calls
 handle_call(_Request, _From, State) ->
-  {noreply, State}. % ignore unknown calls
+  {reply, {error, unknown_call}, State}.
 
 %% @private
 %% @doc Handle {@link gen_server:cast/2}.
 
+%% unknown casts
 handle_cast(_Request, State) ->
-  {noreply, State}. % ignore unknown casts
+  {noreply, State}.
 
 %% @private
-%% @doc Handle incoming messages (UDP data and commands).
+%% @doc Handle incoming messages.
 
-handle_info({udp, Socket, IP, Port, Line} = _Msg,
+handle_info({udp, Socket, IP, Port, Line} = _Message,
             State = #state{socket = Socket}) ->
+  inet:setopts(Socket, [{active, once}]),
   RoutingHint = {IP, Port},
-  gen_indira_listener:command(RoutingHint, Line),
+  gen_indira_socket:command(Line, RoutingHint),
   {noreply, State};
 
-handle_info({result, {IP, Port} = _RoutingHint, Line} = _Msg,
+handle_info({result, {IP, Port} = _RoutingHint, Line} = _Message,
             State = #state{socket = Socket}) ->
   gen_udp:send(Socket, IP, Port, [Line, "\n"]),
   {noreply, State};
 
-handle_info(_Msg, State = #state{}) ->
-  {noreply, State}. % ignore other messages
+handle_info({error, {IP, Port} = _RoutingHint, Type, Reason} = _Message,
+            State) ->
+  indira_log:warn("command execution error",
+                  [{error_type, Type}, {error, Reason}, {peer, {IP, Port}}]),
+  {noreply, State};
+
+handle_info({error, {IP, Port} = _RoutingHint, Type, Reason, StackTrace} = _Message,
+            State) ->
+  indira_log:warn("command execution error",
+                  [{error_type, Type}, {error, Reason}, {peer, {IP, Port}},
+                   {stack, StackTrace}]),
+  {noreply, State};
+
+%% unknown messages
+handle_info(_Message, State) ->
+  {noreply, State}.
 
 %% }}}
 %%----------------------------------------------------------
@@ -184,19 +216,38 @@ code_change(_OldVsn, State, _Extra) ->
 %%% network helpers
 %%%---------------------------------------------------------------------------
 
+%% @doc Prepare listening {@link gen_udp} socket.
+%%
+%% @todo IPv6 support
+
+-spec listen(any | inet:hostname() | inet:ip_address(), inet:port_number()) ->
+  {ok, gen_udp:socket()} | {error, {listen | resolve, term()}}.
+
+listen(Address, Port) ->
+  case bind_options(Address) of
+    {ok, BindOptions} ->
+      Options = [list, {active, once}, {reuseaddr, true} | BindOptions],
+      case gen_udp:open(Port, Options) of
+        {ok, Socket} -> {ok, Socket};
+        {error, Reason} -> {error, {listen, Reason}}
+      end;
+    {error, Reason} ->
+      {error, {resolve, Reason}}
+  end.
+
 %% @doc Resolve DNS address to IP.
 
--spec address_to_bind_option(any | inet:hostname() | inet:ip_address()) ->
-  [{atom(), term()}].
+-spec bind_options(any | inet:hostname() | inet:ip_address()) ->
+  {ok, [{atom(), term()}]} | {error, term()}.
 
-address_to_bind_option(any) ->
-  [];
-address_to_bind_option(Addr) when is_list(Addr); is_atom(Addr) ->
+bind_options(any = _Addr) ->
+  {ok, []};
+bind_options(Addr) ->
   % TODO: IPv6 (inet6)
-  {ok, HostAddr} = inet:getaddr(Addr, inet),
-  [{ip, HostAddr}];
-address_to_bind_option(Addr) when is_tuple(Addr) ->
-  [{ip, Addr}].
+  case inet:getaddr(Addr, inet) of
+    {ok, HostAddr} -> {ok, [{ip, HostAddr}]};
+    {error, Reason} -> {error, Reason}
+  end.
 
 %%%---------------------------------------------------------------------------
 %%% vim:ft=erlang:foldmethod=marker

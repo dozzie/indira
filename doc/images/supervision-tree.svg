@@ -1,0 +1,165 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
+<svg viewBox="0 0 1188 360" xmlns="http://www.w3.org/2000/svg" xmlns:inkspace="http://www.inkscape.org/namespaces/inkscape" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs id="defs_block">
+    <filter height="1.504" id="filter_blur" inkspace:collect="always" width="1.1575" x="-0.07875" y="-0.252">
+      <feGaussianBlur id="feGaussianBlur3780" inkspace:collect="always" stdDeviation="4.2" />
+    </filter>
+  </defs>
+  <title>blockdiag</title>
+  <desc>blockdiag {
+  orientation = portrait;
+  default_shape = roundedbox;
+
+  node_width = 100;
+  span_width = 20;
+
+  indira_sup -&gt; indira_boot_sup;
+  indira_sup -&gt; indira_command_sup;
+  indira_sup -&gt; indira_socket_sup;
+
+  indira_boot_sup -&gt; indira_chdir;
+  indira_boot_sup -&gt; indira_dist_erl;
+  indira_boot_sup -&gt; indira_pidfile;
+
+  indira_command_sup -&gt; indira_command;
+
+  indira_socket_sup -&gt; indira_tcp_conn_sup;
+  indira_socket_sup -&gt; indira_unix_conn_sup;
+  indira_socket_sup -&gt; indira_udp;
+  indira_socket_sup -&gt; indira_tcp;
+  indira_socket_sup -&gt; indira_unix;
+
+  indira_tcp_conn_sup -&gt; indira_tcp_conn;
+  indira_unix_conn_sup -&gt; indira_unix_conn;
+
+  indira_tcp  [stacked];
+  indira_udp  [stacked];
+  indira_unix [stacked];
+  indira_tcp_conn  [stacked];
+  indira_unix_conn [stacked];
+  indira_command   [stacked];
+
+  indira_command_sup    [width = 140];
+  indira_command        [width = 120];
+  indira_socket_sup     [width = 120];
+  indira_tcp_conn_sup   [width = 120];
+  indira_unix_conn_sup  [width = 128];
+}
+
+// vim:ft=dot
+</desc>
+  <path d="M 31 46 L 115 46 A8,8 0 0 1 123 54 L 123 78 A8,8 0 0 1 115 86 L 31 86 A8,8 0 0 1 23 78 L 23 54 A8,8 0 0 1 31 46" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 31 126 L 115 126 A8,8 0 0 1 123 134 L 123 158 A8,8 0 0 1 115 166 L 31 166 A8,8 0 0 1 23 158 L 23 134 A8,8 0 0 1 31 126" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 391 126 L 515 126 A8,8 0 0 1 523 134 L 523 158 A8,8 0 0 1 515 166 L 391 166 A8,8 0 0 1 383 158 L 383 134 A8,8 0 0 1 391 126" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 551 126 L 655 126 A8,8 0 0 1 663 134 L 663 158 A8,8 0 0 1 655 166 L 551 166 A8,8 0 0 1 543 158 L 543 134 A8,8 0 0 1 551 126" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 31 206 L 115 206 A8,8 0 0 1 123 214 L 123 238 A8,8 0 0 1 115 246 L 31 246 A8,8 0 0 1 23 238 L 23 214 A8,8 0 0 1 31 206" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 151 206 L 235 206 A8,8 0 0 1 243 214 L 243 238 A8,8 0 0 1 235 246 L 151 246 A8,8 0 0 1 143 238 L 143 214 A8,8 0 0 1 151 206" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 271 206 L 355 206 A8,8 0 0 1 363 214 L 363 238 A8,8 0 0 1 355 246 L 271 246 A8,8 0 0 1 263 238 L 263 214 A8,8 0 0 1 271 206" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 409 214 L 513 214 A8,8 0 0 1 521 222 L 521 246 A8,8 0 0 1 513 254 L 409 254 A8,8 0 0 1 401 246 L 401 222 A8,8 0 0 1 409 214" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 405 210 L 509 210 A8,8 0 0 1 517 218 L 517 242 A8,8 0 0 1 509 250 L 405 250 A8,8 0 0 1 397 242 L 397 218 A8,8 0 0 1 405 210" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 401 206 L 505 206 A8,8 0 0 1 513 214 L 513 238 A8,8 0 0 1 505 246 L 401 246 A8,8 0 0 1 393 238 L 393 214 A8,8 0 0 1 401 206" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 551 206 L 655 206 A8,8 0 0 1 663 214 L 663 238 A8,8 0 0 1 655 246 L 551 246 A8,8 0 0 1 543 238 L 543 214 A8,8 0 0 1 551 206" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 691 206 L 803 206 A8,8 0 0 1 811 214 L 811 238 A8,8 0 0 1 803 246 L 691 246 A8,8 0 0 1 683 238 L 683 214 A8,8 0 0 1 691 206" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 847 214 L 931 214 A8,8 0 0 1 939 222 L 939 246 A8,8 0 0 1 931 254 L 847 254 A8,8 0 0 1 839 246 L 839 222 A8,8 0 0 1 847 214" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 843 210 L 927 210 A8,8 0 0 1 935 218 L 935 242 A8,8 0 0 1 927 250 L 843 250 A8,8 0 0 1 835 242 L 835 218 A8,8 0 0 1 843 210" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 839 206 L 923 206 A8,8 0 0 1 931 214 L 931 238 A8,8 0 0 1 923 246 L 839 246 A8,8 0 0 1 831 238 L 831 214 A8,8 0 0 1 839 206" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 967 214 L 1051 214 A8,8 0 0 1 1059 222 L 1059 246 A8,8 0 0 1 1051 254 L 967 254 A8,8 0 0 1 959 246 L 959 222 A8,8 0 0 1 967 214" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 963 210 L 1047 210 A8,8 0 0 1 1055 218 L 1055 242 A8,8 0 0 1 1047 250 L 963 250 A8,8 0 0 1 955 242 L 955 218 A8,8 0 0 1 963 210" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 959 206 L 1043 206 A8,8 0 0 1 1051 214 L 1051 238 A8,8 0 0 1 1043 246 L 959 246 A8,8 0 0 1 951 238 L 951 214 A8,8 0 0 1 959 206" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 1087 214 L 1171 214 A8,8 0 0 1 1179 222 L 1179 246 A8,8 0 0 1 1171 254 L 1087 254 A8,8 0 0 1 1079 246 L 1079 222 A8,8 0 0 1 1087 214" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 1083 210 L 1167 210 A8,8 0 0 1 1175 218 L 1175 242 A8,8 0 0 1 1167 250 L 1083 250 A8,8 0 0 1 1075 242 L 1075 218 A8,8 0 0 1 1083 210" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 1079 206 L 1163 206 A8,8 0 0 1 1171 214 L 1171 238 A8,8 0 0 1 1163 246 L 1079 246 A8,8 0 0 1 1071 238 L 1071 214 A8,8 0 0 1 1079 206" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 569 294 L 653 294 A8,8 0 0 1 661 302 L 661 326 A8,8 0 0 1 653 334 L 569 334 A8,8 0 0 1 561 326 L 561 302 A8,8 0 0 1 569 294" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 565 290 L 649 290 A8,8 0 0 1 657 298 L 657 322 A8,8 0 0 1 649 330 L 565 330 A8,8 0 0 1 557 322 L 557 298 A8,8 0 0 1 565 290" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 561 286 L 645 286 A8,8 0 0 1 653 294 L 653 318 A8,8 0 0 1 645 326 L 561 326 A8,8 0 0 1 553 318 L 553 294 A8,8 0 0 1 561 286" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 713 294 L 797 294 A8,8 0 0 1 805 302 L 805 326 A8,8 0 0 1 797 334 L 713 334 A8,8 0 0 1 705 326 L 705 302 A8,8 0 0 1 713 294" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 709 290 L 793 290 A8,8 0 0 1 801 298 L 801 322 A8,8 0 0 1 793 330 L 709 330 A8,8 0 0 1 701 322 L 701 298 A8,8 0 0 1 709 290" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 705 286 L 789 286 A8,8 0 0 1 797 294 L 797 318 A8,8 0 0 1 789 326 L 705 326 A8,8 0 0 1 697 318 L 697 294 A8,8 0 0 1 705 286" fill="rgb(0,0,0)" stroke="rgb(0,0,0)" style="filter:url(#filter_blur);opacity:0.7;fill-opacity:1" />
+  <path d="M 28 40 L 112 40 A8,8 0 0 1 120 48 L 120 72 A8,8 0 0 1 112 80 L 28 80 A8,8 0 0 1 20 72 L 20 48 A8,8 0 0 1 28 40" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <text fill="rgb(0,0,0)" font-family="sansserif" font-size="11" font-style="normal" font-weight="normal" x="40" y="66">indira_sup</text>
+  <path d="M 28 120 L 112 120 A8,8 0 0 1 120 128 L 120 152 A8,8 0 0 1 112 160 L 28 160 A8,8 0 0 1 20 152 L 20 128 A8,8 0 0 1 28 120" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <text fill="rgb(0,0,0)" font-family="sansserif" font-size="11" font-style="normal" font-weight="normal" x="25" y="146">indira_boot_sup</text>
+  <path d="M 388 120 L 512 120 A8,8 0 0 1 520 128 L 520 152 A8,8 0 0 1 512 160 L 388 160 A8,8 0 0 1 380 152 L 380 128 A8,8 0 0 1 388 120" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <text fill="rgb(0,0,0)" font-family="sansserif" font-size="11" font-style="normal" font-weight="normal" x="396" y="146">indira_command_sup</text>
+  <path d="M 548 120 L 652 120 A8,8 0 0 1 660 128 L 660 152 A8,8 0 0 1 652 160 L 548 160 A8,8 0 0 1 540 152 L 540 128 A8,8 0 0 1 548 120" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <text fill="rgb(0,0,0)" font-family="sansserif" font-size="11" font-style="normal" font-weight="normal" x="549" y="146">indira_socket_sup</text>
+  <path d="M 28 200 L 112 200 A8,8 0 0 1 120 208 L 120 232 A8,8 0 0 1 112 240 L 28 240 A8,8 0 0 1 20 232 L 20 208 A8,8 0 0 1 28 200" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <text fill="rgb(0,0,0)" font-family="sansserif" font-size="11" font-style="normal" font-weight="normal" x="34" y="226">indira_chdir</text>
+  <path d="M 148 200 L 232 200 A8,8 0 0 1 240 208 L 240 232 A8,8 0 0 1 232 240 L 148 240 A8,8 0 0 1 140 232 L 140 208 A8,8 0 0 1 148 200" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <text fill="rgb(0,0,0)" font-family="sansserif" font-size="11" font-style="normal" font-weight="normal" x="145" y="226">indira_dist_erl</text>
+  <path d="M 268 200 L 352 200 A8,8 0 0 1 360 208 L 360 232 A8,8 0 0 1 352 240 L 268 240 A8,8 0 0 1 260 232 L 260 208 A8,8 0 0 1 268 200" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <text fill="rgb(0,0,0)" font-family="sansserif" font-size="11" font-style="normal" font-weight="normal" x="268" y="226">indira_pidfile</text>
+  <path d="M 406 208 L 510 208 A8,8 0 0 1 518 216 L 518 240 A8,8 0 0 1 510 248 L 406 248 A8,8 0 0 1 398 240 L 398 216 A8,8 0 0 1 406 208" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <path d="M 402 204 L 506 204 A8,8 0 0 1 514 212 L 514 236 A8,8 0 0 1 506 244 L 402 244 A8,8 0 0 1 394 236 L 394 212 A8,8 0 0 1 402 204" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <path d="M 398 200 L 502 200 A8,8 0 0 1 510 208 L 510 232 A8,8 0 0 1 502 240 L 398 240 A8,8 0 0 1 390 232 L 390 208 A8,8 0 0 1 398 200" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <text fill="rgb(0,0,0)" font-family="sansserif" font-size="11" font-style="normal" font-weight="normal" x="408" y="226">indira_command</text>
+  <path d="M 548 200 L 652 200 A8,8 0 0 1 660 208 L 660 232 A8,8 0 0 1 652 240 L 548 240 A8,8 0 0 1 540 232 L 540 208 A8,8 0 0 1 548 200" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <text fill="rgb(0,0,0)" font-family="sansserif" font-size="11" font-style="normal" font-weight="normal" x="543" y="226">indira_tcp_conn_sup</text>
+  <path d="M 688 200 L 800 200 A8,8 0 0 1 808 208 L 808 232 A8,8 0 0 1 800 240 L 688 240 A8,8 0 0 1 680 232 L 680 208 A8,8 0 0 1 688 200" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <text fill="rgb(0,0,0)" font-family="sansserif" font-size="11" font-style="normal" font-weight="normal" x="684" y="226">indira_unix_conn_sup</text>
+  <path d="M 844 208 L 928 208 A8,8 0 0 1 936 216 L 936 240 A8,8 0 0 1 928 248 L 844 248 A8,8 0 0 1 836 240 L 836 216 A8,8 0 0 1 844 208" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <path d="M 840 204 L 924 204 A8,8 0 0 1 932 212 L 932 236 A8,8 0 0 1 924 244 L 840 244 A8,8 0 0 1 832 236 L 832 212 A8,8 0 0 1 840 204" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <path d="M 836 200 L 920 200 A8,8 0 0 1 928 208 L 928 232 A8,8 0 0 1 920 240 L 836 240 A8,8 0 0 1 828 232 L 828 208 A8,8 0 0 1 836 200" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <text fill="rgb(0,0,0)" font-family="sansserif" font-size="11" font-style="normal" font-weight="normal" x="848" y="226">indira_udp</text>
+  <path d="M 964 208 L 1048 208 A8,8 0 0 1 1056 216 L 1056 240 A8,8 0 0 1 1048 248 L 964 248 A8,8 0 0 1 956 240 L 956 216 A8,8 0 0 1 964 208" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <path d="M 960 204 L 1044 204 A8,8 0 0 1 1052 212 L 1052 236 A8,8 0 0 1 1044 244 L 960 244 A8,8 0 0 1 952 236 L 952 212 A8,8 0 0 1 960 204" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <path d="M 956 200 L 1040 200 A8,8 0 0 1 1048 208 L 1048 232 A8,8 0 0 1 1040 240 L 956 240 A8,8 0 0 1 948 232 L 948 208 A8,8 0 0 1 956 200" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <text fill="rgb(0,0,0)" font-family="sansserif" font-size="11" font-style="normal" font-weight="normal" x="968" y="226">indira_tcp</text>
+  <path d="M 1084 208 L 1168 208 A8,8 0 0 1 1176 216 L 1176 240 A8,8 0 0 1 1168 248 L 1084 248 A8,8 0 0 1 1076 240 L 1076 216 A8,8 0 0 1 1084 208" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <path d="M 1080 204 L 1164 204 A8,8 0 0 1 1172 212 L 1172 236 A8,8 0 0 1 1164 244 L 1080 244 A8,8 0 0 1 1072 236 L 1072 212 A8,8 0 0 1 1080 204" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <path d="M 1076 200 L 1160 200 A8,8 0 0 1 1168 208 L 1168 232 A8,8 0 0 1 1160 240 L 1076 240 A8,8 0 0 1 1068 232 L 1068 208 A8,8 0 0 1 1076 200" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <text fill="rgb(0,0,0)" font-family="sansserif" font-size="11" font-style="normal" font-weight="normal" x="1085" y="226">indira_unix</text>
+  <path d="M 566 288 L 650 288 A8,8 0 0 1 658 296 L 658 320 A8,8 0 0 1 650 328 L 566 328 A8,8 0 0 1 558 320 L 558 296 A8,8 0 0 1 566 288" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <path d="M 562 284 L 646 284 A8,8 0 0 1 654 292 L 654 316 A8,8 0 0 1 646 324 L 562 324 A8,8 0 0 1 554 316 L 554 292 A8,8 0 0 1 562 284" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <path d="M 558 280 L 642 280 A8,8 0 0 1 650 288 L 650 312 A8,8 0 0 1 642 320 L 558 320 A8,8 0 0 1 550 312 L 550 288 A8,8 0 0 1 558 280" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <text fill="rgb(0,0,0)" font-family="sansserif" font-size="11" font-style="normal" font-weight="normal" x="555" y="306">indira_tcp_conn</text>
+  <path d="M 710 288 L 794 288 A8,8 0 0 1 802 296 L 802 320 A8,8 0 0 1 794 328 L 710 328 A8,8 0 0 1 702 320 L 702 296 A8,8 0 0 1 710 288" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <path d="M 706 284 L 790 284 A8,8 0 0 1 798 292 L 798 316 A8,8 0 0 1 790 324 L 706 324 A8,8 0 0 1 698 316 L 698 292 A8,8 0 0 1 706 284" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <path d="M 702 280 L 786 280 A8,8 0 0 1 794 288 L 794 312 A8,8 0 0 1 786 320 L 702 320 A8,8 0 0 1 694 312 L 694 288 A8,8 0 0 1 702 280" fill="rgb(255,255,255)" stroke="rgb(0,0,0)" />
+  <text fill="rgb(0,0,0)" font-family="sansserif" font-size="11" font-style="normal" font-weight="normal" x="696" y="306">indira_unix_conn</text>
+  <path d="M 70 80 L 70 100" fill="none" stroke="rgb(0,0,0)" />
+  <path d="M 70 100 L 600 100" fill="none" stroke="rgb(0,0,0)" />
+  <path d="M 600 100 L 600 112" fill="none" stroke="rgb(0,0,0)" />
+  <polygon fill="rgb(0,0,0)" points="600,119 596,112 604,112 600,119" stroke="rgb(0,0,0)" />
+  <path d="M 70 80 L 70 112" fill="none" stroke="rgb(0,0,0)" />
+  <polygon fill="rgb(0,0,0)" points="70,119 66,112 74,112 70,119" stroke="rgb(0,0,0)" />
+  <path d="M 70 80 L 70 100" fill="none" stroke="rgb(0,0,0)" />
+  <path d="M 70 100 L 450 100" fill="none" stroke="rgb(0,0,0)" />
+  <path d="M 450 100 L 450 112" fill="none" stroke="rgb(0,0,0)" />
+  <polygon fill="rgb(0,0,0)" points="450,119 446,112 454,112 450,119" stroke="rgb(0,0,0)" />
+  <path d="M 70 160 L 70 180" fill="none" stroke="rgb(0,0,0)" />
+  <path d="M 70 180 L 310 180" fill="none" stroke="rgb(0,0,0)" />
+  <path d="M 310 180 L 310 192" fill="none" stroke="rgb(0,0,0)" />
+  <polygon fill="rgb(0,0,0)" points="310,199 306,192 314,192 310,199" stroke="rgb(0,0,0)" />
+  <path d="M 70 160 L 70 192" fill="none" stroke="rgb(0,0,0)" />
+  <polygon fill="rgb(0,0,0)" points="70,199 66,192 74,192 70,199" stroke="rgb(0,0,0)" />
+  <path d="M 70 160 L 70 180" fill="none" stroke="rgb(0,0,0)" />
+  <path d="M 70 180 L 190 180" fill="none" stroke="rgb(0,0,0)" />
+  <path d="M 190 180 L 190 192" fill="none" stroke="rgb(0,0,0)" />
+  <polygon fill="rgb(0,0,0)" points="190,199 186,192 194,192 190,199" stroke="rgb(0,0,0)" />
+  <path d="M 450 160 L 450 192" fill="none" stroke="rgb(0,0,0)" />
+  <polygon fill="rgb(0,0,0)" points="450,199 446,192 454,192 450,199" stroke="rgb(0,0,0)" />
+  <path d="M 600 160 L 600 192" fill="none" stroke="rgb(0,0,0)" />
+  <polygon fill="rgb(0,0,0)" points="600,199 596,192 604,192 600,199" stroke="rgb(0,0,0)" />
+  <path d="M 600 160 L 600 180" fill="none" stroke="rgb(0,0,0)" />
+  <path d="M 600 180 L 1118 180" fill="none" stroke="rgb(0,0,0)" />
+  <path d="M 1118 180 L 1118 192" fill="none" stroke="rgb(0,0,0)" />
+  <polygon fill="rgb(0,0,0)" points="1118,199 1114,192 1122,192 1118,199" stroke="rgb(0,0,0)" />
+  <path d="M 600 160 L 600 180" fill="none" stroke="rgb(0,0,0)" />
+  <path d="M 600 180 L 998 180" fill="none" stroke="rgb(0,0,0)" />
+  <path d="M 998 180 L 998 192" fill="none" stroke="rgb(0,0,0)" />
+  <polygon fill="rgb(0,0,0)" points="998,199 994,192 1002,192 998,199" stroke="rgb(0,0,0)" />
+  <path d="M 600 160 L 600 180" fill="none" stroke="rgb(0,0,0)" />
+  <path d="M 600 180 L 744 180" fill="none" stroke="rgb(0,0,0)" />
+  <path d="M 744 180 L 744 192" fill="none" stroke="rgb(0,0,0)" />
+  <polygon fill="rgb(0,0,0)" points="744,199 740,192 748,192 744,199" stroke="rgb(0,0,0)" />
+  <path d="M 600 160 L 600 180" fill="none" stroke="rgb(0,0,0)" />
+  <path d="M 600 180 L 878 180" fill="none" stroke="rgb(0,0,0)" />
+  <path d="M 878 180 L 878 192" fill="none" stroke="rgb(0,0,0)" />
+  <polygon fill="rgb(0,0,0)" points="878,199 874,192 882,192 878,199" stroke="rgb(0,0,0)" />
+  <path d="M 600 240 L 600 272" fill="none" stroke="rgb(0,0,0)" />
+  <polygon fill="rgb(0,0,0)" points="600,279 596,272 604,272 600,279" stroke="rgb(0,0,0)" />
+  <path d="M 744 240 L 744 272" fill="none" stroke="rgb(0,0,0)" />
+  <polygon fill="rgb(0,0,0)" points="744,279 740,272 748,272 744,279" stroke="rgb(0,0,0)" />
+</svg>
