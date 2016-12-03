@@ -9,14 +9,8 @@ install-doc:
 	mkdir -p $(CURDIR)/debian/tmp/usr/share/doc/$(DEB_PKG)
 	cp -R doc $(CURDIR)/debian/tmp/usr/share/doc/$(DEB_PKG)/API
 
-override_dh_auto_build:
-	rebar compile
+override_dh_auto_install: install install-doc
 
 override_dh_auto_clean:
 	rebar clean
 	rm doc/*.html doc/*.css doc/*.png doc/edoc-info
-
-override_dh_auto_install: install install-doc
-
-override_dh_auto_test:
-	: skipped

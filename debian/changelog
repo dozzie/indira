@@ -1,3 +1,10 @@
+erlang-indira (0.9.0-1) stable; urgency=low
+
+  * Ground-up rewrite of the internals and public API cleanup.
+  * Fixed two memory leaks around unix sockets.
+
+ -- Stanislaw Klekot <dozzie@jarowit.net>  Sat, 03 Dec 2016 14:43:28 +0100
+
 erlang-indira (0.2.0~1g50ee08-1) stable; urgency=low
 
   * Initial release.
