@@ -199,10 +199,10 @@ encode_unicode(Char) ->
 %% @doc Encode number (integer or float) as a string.
 
 -spec encode_number(number()) ->
-  string().
+  iolist().
 
 encode_number(N) when is_float(N) ->
-  float_to_list(N);
+  io_lib:write(N); % output of float_to_list() looks too complex and ugly
 encode_number(N) when is_integer(N) ->
   integer_to_list(N).
 
