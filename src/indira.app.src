@@ -13,6 +13,7 @@
     indira_pidfile
   ]},
   {applications, [kernel, stdlib]},
+  {modules, []},
   {mod, {indira_application, []}},
   {env, [
     %{command, Callback :: fun() | {fun(), term()} | {module(), term()}},
