@@ -34,12 +34,15 @@
   | {name_type, shortnames | longnames | undefined}
   | {cookie, none | undefined | atom() | {file, file:filename()}}
   | {net_start, boolean() | undefined}
-  | {start_before, AppName :: atom()}
-  | {start_after, AppName :: atom()}.
+  | {start_before, AppName :: atom() | undefined}
+  | {start_after, AppName :: atom() | undefined}.
 %% Options that correspond to Indira's environment. `node_name', `name_type',
 %% and `cookie' compose <i>indira/net</i> parameter. See {@link configuration}
 %% for details. `{start_*, AppName}' allow to start additional applications
-%% (e.g. SASL) before or after Indira.
+%% (e.g. SASL) before or after Indira and add up when used multiple times.
+%%
+%% Setting an option to `undefined' has the same result as omitting it (other
+%% instances in the option list may still set the option, though).
 
 -type config() :: term().
 %% Structure with configuration options loaded from a file.
