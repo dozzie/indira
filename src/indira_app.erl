@@ -12,23 +12,26 @@
 -module(indira_app).
 
 %% setting options
--export([set_option/3, set_env/4, set_env/3, indira_setup/1]).
+-export([set_env/2, default_env/1, indira_setup/1]).
+-export([reload/0, format_stacktrace/1]).
 %% starting applications
 -export([start_rec/1, start_rec/2, daemonize/2]).
+-export([wait_for_start/1, is_started/1]).
 -export([sleep_forever/0]).
 %% starting/stopping distributed Erlang
 -export([distributed_start/0, distributed_stop/0, distributed_reconfigure/1]).
 
 -export_type([daemon_option/0]).
--export_type([set_spec/0, set_option/0]).
--export_type([config/0, config_key/0, config_value/0, env_key/0]).
 
 %%%---------------------------------------------------------------------------
 %%% types {{{
 
+-define(RELOAD_MUTEX_NAME, '$indira_reload').
+
 -type daemon_option() ::
     {listen, [{module(), gen_indira_socket:listen_address()}]}
   | {command, {module(), term()}}
+  | {reload, {Mod :: module(), Fun :: atom(), Args :: [term()]}}
   | {pidfile, file:filename() | undefined}
   | {node_name, node() | undefined}
   | {name_type, shortnames | longnames | undefined}
@@ -43,26 +46,6 @@
 %%
 %% Setting an option to `undefined' has the same result as omitting it (other
 %% instances in the option list may still set the option, though).
-
--type config() :: term().
-%% Structure with configuration options loaded from a file.
-
--type config_key() :: term().
-%% Option name to lookup in {@type config()}.
-
--type config_value() :: term().
-%% Value of {@type config_key()} in {@type config()}.
-
--type env_key() :: {AppName :: atom(), Parameter :: atom()}.
-%% Application environment parameter name.
-
--type set_spec() ::
-    {config_key(), env_key()}
-  | {config_key(), env_key(), [set_option()]}.
-%% Specification for setting an app parameter.
-
--type set_option() :: append | if_set | if_unset.
-%% When and how to set an app parameter.
 
 %%% }}}
 %%%---------------------------------------------------------------------------
@@ -113,20 +96,64 @@ distributed_reconfigure(Options) ->
 %%% setting options
 %%%---------------------------------------------------------------------------
 
-%% @doc Set configuration option for specified application.
-%%
-%%   Raises an exception (`erlang:error()') on application loading error.
+%% @doc Synchronize application's environment to the specified values.
 
--spec set_option(atom(), atom(), term()) ->
-  ok | no_return().
+-spec set_env(atom(), Environment :: [Param]) ->
+  ok | {error, Reason}
+  when Param :: {Name :: atom(), Value :: term()},
+       Reason :: bad_name | bad_app | file:posix().
 
-set_option(App, Option, Value) ->
-  case application:load(App) of
-    ok -> ok;
-    {error, {already_loaded, App}} -> ok;
-    {error, Reason} -> erlang:error(Reason)
-  end,
-  application:set_env(App, Option, Value).
+set_env(App, Environment) ->
+  case default_env(App) of
+    {ok, DefaultEnv} ->
+      application:load(App),
+      % environment is a proplist: the earlier keys overwrite the later ones
+      EnvDict = lists:foldr(
+        fun({Name, Value}, Acc) -> dict:store(Name, Value, Acc) end,
+        dict:new(),
+        Environment ++ DefaultEnv
+      ),
+      lists:foreach(
+        fun(Name) -> application:unset_env(App, Name) end,
+        [Name ||
+          {Name, _Value} <- application:get_all_env(App),
+          not dict:is_key(Name, EnvDict)]
+      ),
+      dict:fold(
+        fun(Name, Value, _Acc) -> application:set_env(App, Name, Value) end,
+        ignore, EnvDict
+      ),
+      ok;
+    {error, Reason} ->
+      {error, Reason}
+  end.
+
+%% @doc Load application's default parameters.
+
+-spec default_env(atom()) ->
+  {ok, Environment :: [Param]} | {error, Reason}
+  when Param :: {Name :: atom(), Value :: term()},
+       Reason :: bad_name | bad_app | file:posix().
+
+default_env(App) when is_atom(App) ->
+  case code:lib_dir(App, ebin) of
+    {error, bad_name} ->
+      {error, bad_name};
+    Ebin ->
+      case file:consult(filename:join(Ebin, atom_to_list(App) ++ ".app")) of
+        {ok, [{application, App, Spec}]} ->
+          {ok, proplists:get_value(env, Spec, [])};
+        {ok, _} ->
+          % the file contents are of unexpected format
+          {error, bad_app};
+        {error, Reason} when is_tuple(Reason) ->
+          % *.app file parse error
+          {error, bad_app};
+        {error, Reason} ->
+          % most probably read error (eperm or similar)
+          {error, Reason}
+      end
+  end.
 
 %% @doc Set Indira application's environment parameters.
 %%
@@ -137,6 +164,7 @@ set_option(App, Option, Value) ->
   ok | {error, Reason}
   when Reason :: invalid_listen_spec
                | invalid_command_handler
+               | invalid_reload_function
                | invalid_pidfile
                | invalid_net_config
                | invalid_net_start.
@@ -147,7 +175,8 @@ indira_setup(Options) ->
     ok -> ok;
     {error, {already_loaded, indira}} -> ok
   end,
-  set_indira_options([listen, command, pidfile, net, net_start, apps], Options).
+  set_indira_options([listen, command, reload, pidfile, net, net_start, apps],
+                     Options).
 
 %%----------------------------------------------------------
 %% validate and set Indira options {{{
@@ -158,6 +187,7 @@ indira_setup(Options) ->
   ok | {error, Reason}
   when Reason :: invalid_listen_spec
                | invalid_command_handler
+               | invalid_reload_function
                | invalid_pidfile
                | invalid_net_config
                | invalid_net_start.
@@ -186,6 +216,16 @@ set_indira_options([command | Rest] = _Aspects, Options) ->
       set_indira_options(Rest, Options);
     _ ->
       {error, invalid_command_handler}
+  end;
+set_indira_options([reload | Rest] = _Aspects, Options) ->
+  case proplists:get_value(reload, Options) of
+    {Mod, Fun, Args} = MFA when is_atom(Mod), is_atom(Fun), is_list(Args) ->
+      application:set_env(indira, reload_function, MFA),
+      set_indira_options(Rest, Options);
+    undefined ->
+      set_indira_options(Rest, Options);
+    _ ->
+      {error, invalid_reload_function}
   end;
 set_indira_options([pidfile | Rest] = _Aspects, Options) ->
   case proplists:get_value(pidfile, Options) of
@@ -279,175 +319,121 @@ check_net_config(_NodeName, _NameType, _Cookie) ->
 %% }}}
 %%----------------------------------------------------------
 
-%% @doc Set application environment from config according to specification.
+%% @doc Call reload function set with `{reload,{M,F,A}}' option.
 %%
-%%   `Config' is a configuration structure, possibly loaded
-%%   from a file (e.g. a proplist).
-%%
-%%   `ConfigGet' is a function that extracts a single configuration value from
-%%   the structure (e.g. {@link proplists:get_value/2}); it's called as
-%%   `ConfigGet(Key, Config)', `Key' being a part of set spec.
-%%
-%%   `Validate' takes the value returned by `ConfigGet(...)', checks it for
-%%   correctness and possibly converts to an appropriate type (e.g. from
-%%   {@type binary()} to {@type @{inet:hostname(), inet:port_number()@}}).
-%%   It's called as `Validate(Key, EnvKey, Value)', `Key' and `EnvKey' being
-%%   parts of set spec and `Value' being a value returned by `ConfigGet()'.
-%%
-%%   `SetSpecs' is a list of tuples describing what value from config to use
-%%   to set what application's environment. Single specification takes form of
-%%   `{Key, EnvKey, SetOpts}' or `{Key, EnvKey}'. `Key' is what is passed to
-%%   `ConfigGet()' along with configuration. `EnvKey' is a pair of two atoms,
-%%   `{Application,Par}', which are used with {@link application:get_env/2}
-%%   and {@link application:set_env/3}.
-%%
-%%   Function pre-loads all the (potentially) necessary applications.
-%%
-%%   If `Validate(...)' returns `{error, Reason}', it will be reported as
-%%   `{error, {Key, EnvKey, Reason}}' and no value from specifications will be
-%%   set.
+%% @see format_stacktrace/1
 
--spec set_env(ConfigGet, Validate, config(), [set_spec()]) ->
-  ok | {error, {config_key(), env_key(), term()} | {app_load, term()} | badarg}
-  when
-    ConfigGet :: fun((config_key(), config()) ->
-                       config_value()),
-    Validate  :: fun((config_key(), env_key(), config_value()) ->
-                       ok | {ok, NewValue :: term()} |
-                       ignore | {error, term()}).
+-spec reload() ->
+  term() | {error, reload_not_set | reload_in_progress}.
 
-set_env(ConfigGet, Validate, Config, SetSpecs) ->
-  case load_apps(SetSpecs) of
-    ok ->
-      try [parse_spec(ConfigGet, Validate, Config, S) || S <- SetSpecs] of
-        Specs ->
-          lists:foreach(fun set_app_env/1, Specs),
-          ok
-      catch
-        error:{Key, EnvKey, Reason} ->
-          {error, {Key, EnvKey, Reason}}
-      end;
-    {error, Reason} ->
-      {error, Reason}
-  end.
-
-%% @doc Set application environment from config according to specification.
-%%
-%%   Simplified version of {@link set_env/4}, with `ConfigGet' set to {@link
-%%   proplists:get_value/2}. This requires `Config' to be a proplist,
-%%   obviously.
-
-set_env(Validate, Config, SetSpecs) ->
-  set_env(fun proplists:get_value/2, Validate, Config, SetSpecs).
-
-%%----------------------------------------------------------
-%% parse_spec() {{{
-
-%% @doc Extract and validate config options for {@link set_app_env/1}.
-%%
-%%   Validation error raises an error ({@link erlang:error/1}) of form
-%%   {@type @{Key, EnvKey, Reason@}}.
-
-parse_spec(ConfigGet, Validate, Config, {Key, EnvKey} = _Spec) ->
-  parse_spec(ConfigGet, Validate, Config, {Key, EnvKey, []});
-parse_spec(ConfigGet, Validate, Config,
-           {Key, {_App,_Param}= EnvKey, SetOpts} = _Spec) ->
-  Value = ConfigGet(Key, Config),
-  case Validate(Key, EnvKey, Value) of
-    ignore ->
-      ignore;
-    ok ->
-      {EnvKey, Value, SetOpts};
-    {ok, EnvValue} ->
-      {EnvKey, EnvValue, SetOpts};
-    {error, Reason} ->
-      erlang:error({Key, EnvKey, Reason})
-  end.
-
-%% }}}
-%%----------------------------------------------------------
-%% set_app_env() {{{
-
-%% @doc Set an application parameter to specified value.
-%%
-%%   Function accepts what {@link parse_spec/4} returned.
-
--spec set_app_env(SetSpec) ->
-  ok
-  when SetSpec :: {env_key(), term(), [set_option()]} | ignore.
-
-set_app_env(ignore) ->
-  ok;
-set_app_env({{App, Param} = _EnvKey, Value, Options}) ->
-  case should_set(App, Param, Options) of
-    true ->
-      case should_append(Options) of
+reload() ->
+  case application:get_env(indira, reload_function) of
+    {ok, {Mod, Fun, Args}} ->
+      case reload_mutex_lock() of
         true ->
-          CurrentValue = case application:get_env(App, Param) of
-            {ok, V} -> V;
-            undefined -> []
-          end,
-          application:set_env(App, Param, CurrentValue ++ [Value]);
+          try
+            apply(Mod, Fun, Args)
+          after
+            reload_mutex_unlock()
+          end;
         false ->
-          application:set_env(App, Param, Value)
+          {error, reload_in_progress}
       end;
-    false ->
-      ok
+    undefined ->
+      {error, reload_not_set}
   end.
 
-%% @doc Determine whether an option should be set or not, according to
-%%   options.
+%%----------------------------------------------------------
+%% reload mutex {{{
 
--spec should_set(atom(), atom(), [set_option()]) ->
+%% @doc Try acquiring the mutex that guards reloading procedure.
+
+-spec reload_mutex_lock() ->
   boolean().
 
-should_set(App, Param, Options) ->
-  Set = case application:get_env(App, Param) of
-    {ok, _} -> set;
-    undefined -> unset
-  end,
-  IfSet   = proplists:get_bool(if_set, Options),
-  IfUnset = proplists:get_bool(if_unset, Options),
-  case {IfSet, IfUnset, Set} of
-    {true, _, set}    -> true;
-    {_, true, unset}  -> true;
-    {false, false, _} -> true; % if neither specified, set always
-    {_, _, _}         -> false
+reload_mutex_lock() ->
+  Self = self(),
+  Pid = spawn(fun() ->
+    try register(?RELOAD_MUTEX_NAME, self()) of
+      true ->
+        Self ! {?RELOAD_MUTEX_NAME, self(), true},
+        receive
+          {unlock, Self} -> ok
+        end
+    catch
+      error:badarg ->
+        Self ! {?RELOAD_MUTEX_NAME, self(), false}
+    end
+  end),
+  receive
+    {?RELOAD_MUTEX_NAME, Pid, Result} -> Result
   end.
 
-%% @doc Determine whether an option should be appended to a current value.
+%% @doc Release the mutex that guards reloading procedure.
 
--spec should_append([set_option()]) ->
-  boolean().
-
-should_append(Options) ->
-  proplists:get_bool(append, Options).
+reload_mutex_unlock() ->
+  ?RELOAD_MUTEX_NAME ! {unlock, self()}.
 
 %% }}}
 %%----------------------------------------------------------
-%% load_apps() {{{
 
-%% @doc Load applications that will be potentially used in `SetSpecs'.
+%% @doc Format stacktrace returned by {@link erlang:get_stacktrace/0} as
+%%   a JSON-serializable object.
+%%
+%% @see indira_json:encode/1
 
--spec load_apps([set_spec()]) ->
-  ok | {error, {app_load, term()} | badarg}.
+-spec format_stacktrace(StackTrace :: [Entry]) ->
+  [indira_json:jhash()]
+  when Entry :: {Module, Function, Args, Location},
+       Module :: atom(),
+       Function :: atom(),
+       Args :: non_neg_integer() | [term()],
+       Location :: [{atom(), term()}].
 
-load_apps([] = _SetSpecs) ->
-  ok;
-load_apps([{_Key, {App, _Par}} | RestSpecs] = _SetSpecs) ->
-  case application:load(App) of
-    ok -> load_apps(RestSpecs);
-    {error, {already_loaded, App}} -> load_apps(RestSpecs);
-    {error, Reason} -> {error, {app_load, Reason}}
-  end;
-load_apps([{_Key, {App, _Par}, _Opts} | RestSpecs] = _SetSpecs) ->
-  case application:load(App) of
-    ok -> load_apps(RestSpecs);
-    {error, {already_loaded, App}} -> load_apps(RestSpecs);
-    {error, Reason} -> {error, {app_load, Reason}}
-  end;
-load_apps(_SetSpecs) ->
-  {error, badarg}.
+format_stacktrace(StackTrace) ->
+  _Result = [
+    [{function, format_function(M, F, A)} | format_location(L)] ||
+    {M, F, A, L} <- StackTrace
+  ].
+
+%%----------------------------------------------------------
+%% stacktrace formatting helpers {{{
+
+%% @doc Format function name as a string (binary).
+
+-spec format_function(atom(), atom(), integer() | list()) ->
+  binary().
+
+format_function(Mod, Fun, Args) when is_list(Args) ->
+  format_function(Mod, Fun, length(Args));
+format_function(Mod, Fun, Arity) when is_integer(Arity) ->
+  iolist_to_binary([
+    atom_to_list(Mod), $:,
+    atom_to_list(Fun), $/,
+    integer_to_list(Arity)
+  ]).
+
+%% @doc Format location as a JSON-serializable hash.
+
+-spec format_location([{atom(), term()}]) ->
+  indira_json:jhash().
+
+format_location([] = _Location) ->
+  [{}];
+format_location(Location) ->
+  [format_location_element(E) || E <- Location].
+
+%% @doc Workhorse for {@link format_location/1}.
+
+-spec format_location_element({atom(), term()}) ->
+  {indira_json:jstring(), indira_json:jscalar()}.
+
+format_location_element({file, File}) when is_list(File) ->
+  {file, list_to_binary(File)};
+format_location_element({line, Line}) when is_integer(Line) ->
+  {line, Line};
+format_location_element({Name, Value}) ->
+  {Name, iolist_to_binary(io_lib:print(Value, 1, 16#FFFFFFFF, -1))}.
 
 %% }}}
 %%----------------------------------------------------------
@@ -476,6 +462,7 @@ load_apps(_SetSpecs) ->
   no_return() | {error, Reason}
   when Reason :: invalid_listen_spec | missing_listen_spec
                | invalid_command_handler | missing_command_handler
+               | invalid_reload_function
                | invalid_pidfile
                | invalid_net_config | invalid_net_start.
 
@@ -500,6 +487,7 @@ daemonize(App, Options) ->
   ok | {error, Reason}
   when Reason :: invalid_listen_spec | missing_listen_spec
                | invalid_command_handler | missing_command_handler
+               | invalid_reload_function
                | invalid_pidfile
                | invalid_net_config | invalid_net_start.
 
@@ -570,6 +558,37 @@ start_rec(App, StartType) ->
     {error, Reason} ->
       {error, Reason}
   end.
+
+%% }}}
+%%----------------------------------------------------------
+%% check (or wait for) application start {{{
+
+%% @doc Wait until the specified supervisor (and, transitively, all its
+%%   children) starts properly.
+%%
+%%   On supervisor's start error, `error' is returned.
+
+-spec wait_for_start(pid() | atom()) ->
+  ok | error.
+
+wait_for_start(Supervisor) ->
+  try supervisor:which_children(Supervisor) of
+    _ -> ok
+  catch
+    _:_ -> error
+  end.
+
+%% @doc Check if an application is started.
+
+-spec is_started(atom()) ->
+  boolean().
+
+is_started(App) ->
+  % `{AppName :: atom(), Desc :: string(), Version :: string()}' or `false';
+  % only non-false when the application started successfully (it's still
+  % `false' during boot time)
+  AppEntry = lists:keyfind(App, 1, application:which_applications()),
+  AppEntry /= false.
 
 %% }}}
 %%----------------------------------------------------------

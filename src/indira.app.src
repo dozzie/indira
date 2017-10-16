@@ -17,6 +17,7 @@
   {mod, {indira_application, []}},
   {env, [
     %{command, Callback :: fun() | {fun(), term()} | {module(), term()}},
+    %{reload_function, {Mod :: atom(), Fun :: atom(), Args :: [term()]}},
     %{pidfile, Path :: file:filename()},
     %{workdir, Path :: file:filename()},
     %{net, {Node :: atom(), NameType :: shortnames | longnames,
