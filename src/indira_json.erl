@@ -19,7 +19,7 @@
 -export([format_error/1]).
 
 -export_type([json_string/0, struct/0]).
--export_type([jhash/0, jarray/0, jscalar/0]).
+-export_type([jhash/0, jarray/0, jscalar/0, jstring/0]).
 
 %%%---------------------------------------------------------------------------
 
