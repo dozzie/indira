@@ -14,8 +14,15 @@
 %%%
 %%%   == Returned errors ==
 %%%
-%%%   Errors returned by this module can all (except for `{error,
-%%%   timeout}') be parsed by {@link inet:format_error/1}.
+%%%   This module returns through
+%%%   {@link gen_indira_socket:send_one_command/4} following errors:
+%%%
+%%%   <ul>
+%%%     <li>`timeout' -- command send timeout timeout</li>
+%%%     <li>`closed' -- socket closed during receiving reply</li>
+%%%     <li>`badarg' -- invalid socket address</li>
+%%%     <li>{@type inet:posix()}</li>
+%%%   </ul>
 %%% @end
 %%%---------------------------------------------------------------------------
 
@@ -30,6 +37,7 @@
 %% gen_indira_socket interface
 -export([child_spec/1]).
 -export([send_one_line/3, retry_send_one_line/3]).
+-export([format_error/1]).
 
 %% gen_server callbacks
 -export([init/1, terminate/2]).
@@ -136,13 +144,29 @@ retry_send_one_line_loop(Address, Line, Timeout, Timer) ->
 
 %% }}}
 %%----------------------------------------------------------
+%% format_error() {{{
+
+%% @private
+%% @doc Make a printable message from an error returned from a function from
+%%   this module.
+
+-spec format_error(Reason :: gen_indira_socket:error()) ->
+  iolist().
+
+format_error(badarg)  -> "invalid argument";
+format_error(timeout) -> "operation timed out";
+format_error(closed)  -> "connection is closed";
+format_error(Reason) -> inet:format_error(Reason).
+
+%% }}}
+%%----------------------------------------------------------
 
 %%%---------------------------------------------------------------------------
 %%% public API for supervision tree
 %%%---------------------------------------------------------------------------
 
 %% @private
-%% @doc Start UDP listener process.
+%% @doc Start TCP listener process.
 
 start_link(Host, Port) ->
   gen_server:start_link(?MODULE, [Host, Port], []).

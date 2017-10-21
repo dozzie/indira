@@ -150,6 +150,15 @@
 %%%             line</li>
 %%%       </ul>
 %%%     </li>
+%%%     <li>`format_error(Reason)' -- make a printable message from an error
+%%%         returned from a function from this module
+%%%
+%%%       Arguments:
+%%%       <ul>
+%%%         <li>`Reason' ({@type term()}) -- second element of an error tuple
+%%%             (`{error,Reason}')</li>
+%%%       </ul>
+%%%     </li>
 %%%   </ul>
 %%%
 %%% @see gen_indira_command
@@ -163,6 +172,7 @@
 -export([execute/3]).
 -export([folds/3, foldg/3]).
 -export([send_one_command/4]).
+-export([format_error/1]).
 
 -export_type([command/0, options/0, request/0, reply/0, socket_address/0]).
 
@@ -211,6 +221,9 @@
                        Options :: options()) ->
   ok | {error, term()}.
 
+-callback format_error(Reason :: term()) ->
+  iolist() | binary().
+
 %%%---------------------------------------------------------------------------
 %%% command line execution
 %%%---------------------------------------------------------------------------
@@ -228,10 +241,10 @@
 %% </ul>
 
 -spec execute([string()], module(), term()) ->
-  ok | help | {error, Reason}
-  when Reason :: {send, bad_request_format | bad_reply_format | term()}
-               | {bad_return_value, term()}
-               | term().
+  ok | help | {error, SendError | ReturnValueError | CallbackError}
+  when SendError :: {send, bad_request_format | bad_reply_format | term()},
+       ReturnValueError :: {bad_return_value, term()},
+       CallbackError :: term().
 
 execute(ArgList, CLIHandler, Defaults) ->
   case CLIHandler:parse_arguments(ArgList, Defaults) of
@@ -306,12 +319,22 @@ send_command(CLIHandler, Command, Options, {SockMod, SockAddr} = _Address) ->
 %%   If `retry' option was specified, refused connection will result in
 %%   retrying to connect indefinitely (or until timeout occurs).
 %%
+%%   `SendError' is a term that can be converted to a printable message with
+%%   `Module:format_error(SendError)'. See documentation of socket module
+%%   (e.g. {@link indira_unix}, {@link indira_udp}, {@link indira_tcp}) for
+%%   list of possible `SendError' values.
+%%
 %%   NOTE: received hashes are compatible with {@link orddict} module.
+%%
+%% @see indira_unix
+%% @see indira_udp
+%% @see indira_tcp
 
 -spec send_one_command(module(), gen_indira_socket:connect_address(),
                        request(), Options :: [Opt]) ->
   {ok, reply()} | {error, Reason}
-  when Reason :: bad_request_format | bad_reply_format | term(),
+  when Reason :: bad_request_format | bad_reply_format
+               | {socket, Module :: module(), SendError :: term()},
        Opt :: {timeout, timeout()} | retry.
 
 send_one_command(Module, Address, Command, Options) when is_list(Options) ->
@@ -331,7 +354,7 @@ send_one_command(Module, Address, Command, Options) when is_list(Options) ->
               {error, bad_reply_format}
           end;
         {error, Reason} ->
-          {error, Reason}
+          {error, {socket, Module, Reason}}
       end;
     {error, badarg} ->
       {error, bad_request_format}
@@ -557,6 +580,51 @@ listsplit(List, N) ->
   catch
     error:badarg -> error
   end.
+
+%%%---------------------------------------------------------------------------
+
+%% @doc Make a printable message from an error returned from a function from
+%%   this module.
+
+-spec format_error(Reason :: term()) ->
+  iolist().
+
+%% `execute()'
+format_error({send, bad_request_format}) ->
+  format_error(bad_request_format);
+format_error({send, bad_reply_format}) ->
+  format_error(bad_reply_format);
+format_error({send, {socket, _SockMod, _Reason} = Error}) ->
+  format_error(Error);
+format_error({bad_return_value, Return}) ->
+  ["callback returned unexpected value ", format_term(Return),
+    " (programmer's error)"];
+
+%% `send_one_command()'
+format_error(bad_request_format) ->
+  "can't serialize command request (programmer's error)";
+format_error(bad_reply_format) ->
+  "can't deserialize reply to the command (programmer's error)";
+format_error({socket, SockMod, Reason}) ->
+  SockMod:format_error(Reason);
+
+%% `foldg()'
+format_error({excessive_value, Option}) when is_list(Option) ->
+  ["unexpected argument for ", Option];
+%% `folds()'
+format_error({not_enough_args, Option}) when is_list(Option) ->
+  ["missing argument for ", Option];
+
+format_error(Reason) ->
+  ["unrecognized error: ", format_term(Reason)].
+
+%% @doc Serialize an arbitrary term to a single line of text.
+
+-spec format_term(term()) ->
+  iolist().
+
+format_term(Term) ->
+  io_lib:print(Term, 1, 16#ffffffff, -1).
 
 %%%---------------------------------------------------------------------------
 %%% vim:ft=erlang:foldmethod=marker

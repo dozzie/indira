@@ -53,9 +53,9 @@
 %%%         should return {@type supervisor:child_spec()}
 %%%     </li>
 %%%     <li>`send_one_line(Address, Line, Timeout)' -- send a line to an
-%%%         administrative socket; function should return `{ok, ReplyLine ::
-%%%         iolist()}' (`ReplyLine' may include trailing newline) or `{error,
-%%%         term()}'
+%%%         administrative socket; function should return
+%%%         {@type @{ok, ReplyLine :: iolist()@}} (`ReplyLine' may include
+%%%         trailing newline) or {@type @{error, error()@}}
 %%%       <ul>
 %%%         <li>`Address' ({@type connect_address()}) -- address to send
 %%%             command to</li>
@@ -67,8 +67,9 @@
 %%%     </li>
 %%%     <li>`retry_send_one_line(Address, Line, Timeout)' -- send a line to an
 %%%         administrative socket, retrying when connection was refused;
-%%%         function should return `{ok, ReplyLine :: iolist()}' (`ReplyLine'
-%%%         may include trailing newline) or `{error, term()}'
+%%%         function should return {@type @{ok, ReplyLine :: iolist()@}}
+%%%         (`ReplyLine' may include trailing newline) or
+%%%         {@type @{error, error()@}}
 %%%       <ul>
 %%%         <li>`Address' ({@type connect_address()}) -- address to send
 %%%             command to</li>
@@ -76,6 +77,13 @@
 %%%             (trailing newline <em>not included</em>)</li>
 %%%         <li>`Timeout' ({@type timeout()}) -- how long to wait for reply
 %%%             (milliseconds or `infinity')</li>
+%%%       </ul>
+%%%     </li>
+%%%     <li>`format_error(Reason)' -- make a printable message from an error
+%%%         returned from a function from the module
+%%%       <ul>
+%%%         <li>`Reason' ({@type error()}) -- second element of an error tuple
+%%%             (`{error,Reason}')</li>
 %%%       </ul>
 %%%     </li>
 %%%   </ul>
@@ -107,6 +115,7 @@
 
 -export_type([address/0, listen_address/0, connect_address/0]).
 -export_type([timer/0]).
+-export_type([error/0]).
 
 %%%---------------------------------------------------------------------------
 
@@ -117,6 +126,8 @@
 -type listen_address() :: address().
 
 -type connect_address() :: address().
+
+-type error() :: term().
 
 %%%---------------------------------------------------------------------------
 
@@ -130,6 +141,9 @@
 -callback retry_send_one_line(Address :: connect_address(), Line :: iolist(),
                               Timeout :: timeout()) ->
   {ok, ReplyLine :: iolist()} | {error, term()}.
+
+-callback format_error(Reason :: error()) ->
+  iolist().
 
 %%%---------------------------------------------------------------------------
 %%% executing commands
