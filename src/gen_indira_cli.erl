@@ -30,12 +30,9 @@
 %      ok;
 %    help ->
 %      io:fwrite("~s~n", [example_cli:usage()]);
-%    {error, {arguments, Reason}} ->
-%      io:fwrite(standard_error, "~p~n", [Reason]), % not a pretty message
-%      io:fwrite(standard_error, "~s~n", [example_cli:usage()]);
-%      halt(1);
 %    {error, Reason} ->
 %      io:fwrite(standard_error, "~p~n", [Reason]), % not a pretty message
+%      io:fwrite(standard_error, "~s~n", [example_cli:usage()]),
 %      halt(1)
 %  end.
 %'''
@@ -98,8 +95,7 @@
 %%%         <li>{@type help} -- print a help message to screen (e.g.
 %%%             <i>--help</i> option was provided)</li>
 %%%         <li>{@type @{error, Reason :: term()@}} -- signal an erroneous
-%%%             command line; returned as `{error, {arguments, Reason}}' from
-%%%             {@link execute/3}</li>
+%%%             command line; returned verbatim from {@link execute/3}</li>
 %%%       </ul>
 %%%
 %%%       Arguments:
@@ -127,8 +123,8 @@
 %%%     <li>`format_request(Command, Options)' -- encode a command as
 %%%         a JSON-serializable structure, so it can be sent through
 %%%         administrative socket; function returns {@type @{ok, request()@}}
-%%%         or {@type @{error, Reason :: term()@}} (returned as `{error,
-%%%         {format, Reason}}' to {@link execute/3} caller)
+%%%         or {@type @{error, Reason :: term()@}} (returned verbatim to
+%%%         {@link execute/3} caller)
 %%%
 %%%       Arguments:
 %%%       <ul>
@@ -223,23 +219,17 @@
 %%
 %% Error formats:
 %% <ul>
-%%   <li>`{error, {arguments, Reason}' when `parse_arguments()' callback
-%%       returns an error</li>
-%%   <li>`{error, {format, Reason}}' when `format_request()' callback returns
-%%       an error</li>
 %%   <li>`{error, {send, Reason}}' on connection or (de)serialization error
 %%       (the same as for {@link send_one_command/4})</li>
 %%   <li>`{error, {bad_return_value, Value}}' when any of the callbacks
 %%       returns an invalid value</li>
-%%   <li>`{error, Reason}' when `handle_command()' or `handle_reply()',
-%%       whichever is called, return an error</li>
+%%   <li>`{error, Reason}' when `parse_arguments()', `handle_command()',
+%%       `format_request()', or `handle_reply()' returns an error</li>
 %% </ul>
 
 -spec execute([string()], module(), term()) ->
   ok | help | {error, Reason}
-  when Reason :: {arguments, term()}
-               | {format, term()}
-               | {send, bad_request_format | bad_reply_format | term()}
+  when Reason :: {send, bad_request_format | bad_reply_format | term()}
                | {bad_return_value, term()}
                | term().
 
@@ -252,7 +242,7 @@ execute(ArgList, CLIHandler, Defaults) ->
     help ->
       help;
     {error, Reason} ->
-      {error, {arguments, Reason}};
+      {error, Reason};
     Result ->
       {error, {bad_return_value, Result}}
   end.
@@ -277,7 +267,6 @@ execute_command(CLIHandler, Command, Options) ->
 -spec send_command(module(), command(), options(), socket_address()) ->
   ok | {error, Reason}
   when Reason :: {send, bad_request_format | bad_reply_format | term()}
-               | {format, term()}
                | {bad_return_value, term()}
                | term().
 
@@ -295,7 +284,7 @@ send_command(CLIHandler, Command, Options, {SockMod, SockAddr} = _Address) ->
           {error, {send, Reason}}
       end;
     {error, Reason} ->
-      {error, {format, Reason}};
+      {error, Reason};
     Result ->
       {error, {bad_return_value, Result}}
   end.

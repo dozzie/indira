@@ -127,12 +127,12 @@ distributed_stop() ->
 %% @see indira_setup/1
 
 -spec distributed_reconfigure([daemon_option()]) ->
-  ok | {error, invalid_net_config | term()}.
+  ok | {error, {indira, invalid_net_config} | term()}.
 
 distributed_reconfigure(Options) ->
   case set_indira_options([net, net_start], Options) of
     ok -> indira_dist_erl:reconfigure();
-    {error, Reason} -> {error, Reason}
+    {error, Reason} -> {error, {indira, Reason}}
   end.
 
 %%%---------------------------------------------------------------------------
@@ -204,7 +204,7 @@ default_env(App) when is_atom(App) ->
 %% altogether.
 
 -spec indira_setup([daemon_option()]) ->
-  ok | {error, Reason}
+  ok | {error, {indira, Reason}}
   when Reason :: invalid_listen_spec
                | invalid_command_handler
                | invalid_reload_function
@@ -218,8 +218,11 @@ indira_setup(Options) ->
     ok -> ok;
     {error, {already_loaded, indira}} -> ok
   end,
-  set_indira_options([listen, command, reload, pidfile, net, net_start, apps],
-                     Options).
+  case set_indira_options([listen, command, reload, pidfile, net, net_start,
+                           apps], Options) of
+    ok -> ok;
+    {error, Reason} -> {error, {indira, Reason}}
+  end.
 
 %%----------------------------------------------------------
 %% validate and set Indira options {{{
@@ -502,7 +505,7 @@ format_location_element({Name, Value}) ->
 %% Function never returns, causing the calling process to sleep forever.
 
 -spec daemonize(atom(), [daemon_option()]) ->
-  no_return() | {error, Reason}
+  no_return() | {error, {indira, Reason}}
   when Reason :: invalid_listen_spec | missing_listen_spec
                | invalid_command_handler | missing_command_handler
                | invalid_reload_function
@@ -521,7 +524,7 @@ daemonize(App, Options) ->
       ok = start_rec(App),
       sleep_forever(); % never return
     {error, Reason} ->
-      {error, Reason}
+      {error, {indira, Reason}}
   end.
 
 %% @doc Prepare options for {@link daemonize/2}.
