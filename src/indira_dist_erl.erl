@@ -258,6 +258,7 @@ start_network({Node, NameType, Cookie} = _NetConfig) ->
   case net_kernel:start([Node, NameType]) of
     {ok, _Pid} -> set_cookie(Cookie);
     {error, {already_started, _Pid}} -> set_cookie(Cookie);
+    {error, {{already_started, _Pid}, _}} -> set_cookie(Cookie);
     {error, Reason} -> {error, Reason}
   end.
 
