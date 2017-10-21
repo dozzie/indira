@@ -141,21 +141,21 @@ distributed_reconfigure(Options) ->
 %%%---------------------------------------------------------------------------
 
 %% @doc Synchronize application's environment to the specified values.
+%%
+%% @see default_env/1
 
 -spec set_env(atom(), Environment :: [Param]) ->
-  ok | {error, Reason}
-  when Param :: {Name :: atom(), Value :: term()},
-       Reason :: bad_name | bad_app | file:posix().
+  ok | {error, bad_app}
+  when Param :: {Name :: atom(), Value :: term()}.
 
 set_env(App, Environment) ->
-  case default_env(App) of
-    {ok, DefaultEnv} ->
-      application:load(App),
+  case load_application(App) of
+    ok ->
       % environment is a proplist: the earlier keys overwrite the later ones
       EnvDict = lists:foldr(
         fun({Name, Value}, Acc) -> dict:store(Name, Value, Acc) end,
         dict:new(),
-        Environment ++ DefaultEnv
+        Environment
       ),
       lists:foreach(
         fun(Name) -> application:unset_env(App, Name) end,
@@ -168,8 +168,20 @@ set_env(App, Environment) ->
         ignore, EnvDict
       ),
       ok;
-    {error, Reason} ->
-      {error, Reason}
+    {error, bad_app} ->
+      {error, bad_app}
+  end.
+
+%% @doc Load an application to set its environment.
+
+-spec load_application(atom()) ->
+  ok | {error, bad_app}.
+
+load_application(App) ->
+  case application:load(App) of
+    ok -> ok;
+    {error, {already_loaded, App}} -> ok;
+    {error, _Reason} -> {error, bad_app}
   end.
 
 %% @doc Load application's default parameters.
