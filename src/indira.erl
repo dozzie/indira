@@ -239,13 +239,17 @@ indira_setup(Options) ->
                | invalid_net_start.
 
 set_indira_options([listen | Rest] = _Aspects, Options) ->
-  ListenSpecs = proplists:get_value(listen, Options, []),
-  case check_listen_specs(ListenSpecs) of
-    ok ->
-      application:set_env(indira, listen, ListenSpecs),
+  case proplists:get_value(listen, Options) of
+    undefined ->
       set_indira_options(Rest, Options);
-    {error, Reason} ->
-      {error, Reason}
+    ListenSpecs ->
+      case check_listen_specs(ListenSpecs) of
+        ok ->
+          application:set_env(indira, listen, ListenSpecs),
+          set_indira_options(Rest, Options);
+        {error, Reason} ->
+          {error, Reason}
+      end
   end;
 set_indira_options([command | Rest] = _Aspects, Options) ->
   case proplists:get_value(command, Options) of
