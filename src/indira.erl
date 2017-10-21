@@ -17,6 +17,7 @@
 -export([sleep_forever/0]).
 %% starting/stopping distributed Erlang
 -export([distributed_start/0, distributed_stop/0, distributed_reconfigure/1]).
+-export([format_error/1]).
 
 -export_type([daemon_option/0]).
 
@@ -658,6 +659,83 @@ sleep_forever() ->
 
 %% }}}
 %%----------------------------------------------------------
+
+%%%---------------------------------------------------------------------------
+%%% error formatting
+%%%---------------------------------------------------------------------------
+
+%% @doc Make a printable message from an error returned from a function from
+%%   this module.
+
+-spec format_error(Reason :: term()) ->
+  iolist().
+
+%% `start()', `start_rec()'; *.app loading problems show up as either POSIX
+%% errors in this form or as Erlang term parsing errors, which should normally
+%% not occur and thus can be handled generically as unrecognized errors
+format_error({Message, File}) when is_list(Message), is_list(File) ->
+  ["start error: ", Message, ": ", File];
+
+% `distributed_start()' (reading cookie file or `net_kernel:start()')
+format_error({read_cookie, empty_file}) ->
+  "cookie file is empty";
+format_error({read_cookie, Posix}) ->
+  file:format_error(Posix);
+format_error({{shutdown, _}, _}) ->
+  "can't configure Erlang networking: check Erlang logs for details (epmd not running?)";
+format_error({shutdown, _}) ->
+  "can't configure Erlang networking: check Erlang logs for details (epmd not running?)";
+% `distributed_stop()' (`net_kernel:stop()')
+format_error(not_allowed) ->
+  "can't deconfigure Erlang networking: networking was started by boot";
+
+%% `daemonize()', `indira_setup()', `distributed_reconfigure()'
+format_error({indira, invalid_listen_spec}) ->
+  "Indira setup error: invalid listen addresses specification";
+format_error({indira, invalid_command_handler}) ->
+  "Indira setup error: invalid command handler module";
+format_error({indira, invalid_reload_function}) ->
+  "Indira setup error: invalid reload function";
+format_error({indira, invalid_pidfile}) ->
+  "Indira setup error: invalid pidfile path";
+format_error({indira, invalid_net_config}) ->
+  "Indira setup error: invalid Erlang networking configuration";
+format_error({indira, invalid_net_start}) ->
+  "Indira setup error: invalid Erlang networking autostart flag";
+format_error({indira, missing_listen_spec}) ->
+  "Indira setup error: missing listen addresses specification";
+format_error({indira, missing_command_handler}) ->
+  "Indira setup error: missing command handler module";
+%% other `distributed_reconfigure()' errors are the same as for
+%% `distributed_start()' and `distributed_stop()'
+
+%% `reload()'
+format_error(reload_not_set) ->
+  "reload function not set";
+format_error(reload_in_progress) ->
+  "another reload call in progress";
+
+%% `set_env()', `default_env()'
+format_error(bad_name) ->
+  "invalid application name";
+format_error(bad_app) ->
+  "can't load *.app file from the application";
+format_error(Posix)
+when Posix == eacces; Posix == eio; Posix == eisdir; Posix == emfile;
+     Posix == emlink; Posix == enfile; Posix == enametoolong; Posix == enoent;
+     Posix == enomem; Posix == enxio; Posix == estale; Posix == exdev ->
+  file:format_error(Posix);
+
+format_error(Reason) ->
+  ["unrecognized error: ", format_term(Reason)].
+
+%% @doc Serialize an arbitrary term to a single line of text.
+
+-spec format_term(term()) ->
+  iolist().
+
+format_term(Term) ->
+  io_lib:print(Term, 1, 16#ffffffff, -1).
 
 %%%---------------------------------------------------------------------------
 %%% vim:ft=erlang:foldmethod=marker
