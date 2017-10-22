@@ -250,6 +250,7 @@ init([Address] = _Args) ->
         undefined -> ok;
         _ -> ok = indira_af_unix:chgrp(Socket, Group)
       end,
+      indira_af_unix_manager:watch(Socket, SocketPath),
       State = #state{socket = Socket},
       {ok, State, 0};
     {error, Reason} ->

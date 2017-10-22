@@ -9,6 +9,7 @@ indira.d
 /doc/*.html
 /doc/*.css
 /priv/*.so
+/priv/indira_unix_unlinker
 /c_src/env.mk
 /c_src/deps.mk
 /c_src/*.o

@@ -68,6 +68,7 @@
 #define PORT_COMMAND_CHOWN_UID     10
 #define PORT_COMMAND_CHGRP_GROUP   11
 #define PORT_COMMAND_CHGRP_GID     12
+#define PORT_COMMAND_STAT          13
 
 // }}}
 //----------------------------------------------------------
@@ -126,6 +127,8 @@ struct unix_context {
   int fdlisten;
   int fdconn;
   struct sockaddr_un address;
+  dev_t sock_device;
+  ino_t sock_inode;
   // Erlang owner and reply-to addresses
   ErlDrvPort erl_port;
   ErlDrvTermData write_reply_to;
@@ -183,6 +186,7 @@ static uint32_t packet_get(struct packet *ctx, char **resbuf, ErlDrvBinary **res
 static uint16_t unpack16(unsigned char *buf);
 static uint32_t unpack32(unsigned char *buf);
 static void store32(unsigned char *buf, uint32_t value);
+static void store64(unsigned char *buf, uint64_t value);
 
 static int find_uid(const char *name, size_t name_len, uid_t *uid);
 static int find_gid(const char *name, size_t name_len, gid_t *gid);
@@ -277,6 +281,8 @@ ErlDrvData cdrv_start(ErlDrvPort port, char *cmd)
   context->fdlisten = -1;
   context->fdconn = -1;
   memset(&context->address, 0, sizeof(context->address));
+  context->sock_device = 0;
+  context->sock_inode = 0;
   // flags, options, and buffers for reading
   context->reading = 0;
   context->read_mode = passive;
@@ -422,6 +428,23 @@ ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
         strcpy(*rbuf, erl_errno_id(errno));
         return strlen(*rbuf);
       }
+
+      // XXX: I know this is a race condition, but really, what can I do?
+      // fstat() returns info from an abstract space, and I need info from
+      // actual filesystem
+      struct stat sock_info;
+      if (stat(context->address.sun_path, &sock_info) < 0) {
+        // assume (*rbuf) is larger than ~20 bytes
+        strcpy(*rbuf, erl_errno_id(errno));
+        return strlen(*rbuf);
+      }
+      if ((sock_info.st_mode & S_IFSOCK) != S_IFSOCK) {
+        // we lost the race to the socket file
+        strcpy(*rbuf, erl_errno_id(ESTALE));
+        return strlen(*rbuf);
+      }
+      context->sock_device = sock_info.st_dev;
+      context->sock_inode = sock_info.st_ino;
 
       return 0;
     break; // }}}
@@ -719,6 +742,17 @@ ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
       }
 
       return 0;
+    break; // }}}
+
+    case PORT_COMMAND_STAT: // {{{
+      if (context->socket_type != listen_socket || context->fdlisten < 0 ||
+          len != 0)
+        return -1;
+
+      store64((unsigned char *)(*rbuf), context->sock_device);
+      store64((unsigned char *)(*rbuf + 8), context->sock_inode);
+
+      return 16;
     break; // }}}
   }
 
@@ -1440,6 +1474,19 @@ void store32(unsigned char *buf, uint32_t value)
   buf[1] = 0xff & (value >> (8 * 2));
   buf[2] = 0xff & (value >> (8 * 1));
   buf[3] = 0xff & (value >> (8 * 0));
+}
+
+static
+void store64(unsigned char *buf, uint64_t value)
+{
+  buf[0] = 0xff & (value >> (8 * 7));
+  buf[1] = 0xff & (value >> (8 * 6));
+  buf[2] = 0xff & (value >> (8 * 5));
+  buf[3] = 0xff & (value >> (8 * 4));
+  buf[4] = 0xff & (value >> (8 * 3));
+  buf[5] = 0xff & (value >> (8 * 2));
+  buf[6] = 0xff & (value >> (8 * 1));
+  buf[7] = 0xff & (value >> (8 * 0));
 }
 
 // }}}

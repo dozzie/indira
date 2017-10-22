@@ -18,7 +18,7 @@
 
 %% server socket API
 -export([listen/2, accept/1, accept/2]).
--export([chmod/2, chown/2, chgrp/2]).
+-export([chmod/2, chown/2, chgrp/2, stat/1]).
 %% connection socket API
 -export([connect/2, send/2, recv/2, recv/3]).
 %% common to server and connection sockets
@@ -31,6 +31,7 @@
 
 -export_type([address/0, option/0, option_name/0]).
 -export_type([socket/0, server_socket/0, connection_socket/0]).
+-export_type([device/0, inode/0]).
 -export_type([message/0]).
 
 %%%---------------------------------------------------------------------------
@@ -50,6 +51,7 @@
 -define(PORT_COMMAND_CHOWN_UID,    10).
 -define(PORT_COMMAND_CHGRP_GROUP,  11).
 -define(PORT_COMMAND_CHGRP_GID,    12).
+-define(PORT_COMMAND_STAT,         13).
 
 %%%---------------------------------------------------------------------------
 
@@ -112,6 +114,9 @@
 
 -type option_name() :: mode | active | packet | packet_size.
 
+-type device() :: non_neg_integer().
+-type inode() :: non_neg_integer().
+
 %%%---------------------------------------------------------------------------
 %%% server socket API
 %%%---------------------------------------------------------------------------
@@ -132,7 +137,6 @@ listen(Address, Options) when is_list(Address); is_binary(Address) ->
     {ok, OptData} ->
       case spawn_port(?PORT_COMMAND_INIT_LISTEN, Address) of
         {ok, Socket} ->
-          % TODO: register the socket in indira_af_unix_manager for autodelete
           ok = control_port(Socket, ?PORT_COMMAND_SETOPTS, OptData),
           {ok, Socket};
         {error, Reason} ->
@@ -220,6 +224,18 @@ chgrp(Socket, Group) when is_integer(Group), Group >= 0, Group =< 16#ffffffff ->
   control_port(Socket, ?PORT_COMMAND_CHGRP_GID, <<Group:32>>);
 chgrp(_Socket, _Group) ->
   {error, badarg}.
+
+%% @doc Retrieve device and inode number where the listening socket is placed.
+
+-spec stat(server_socket()) ->
+  {ok, {device(), inode()}} | {error, badarg}.
+
+stat(Socket) ->
+  try port_control(Socket, ?PORT_COMMAND_STAT, <<>>) of
+    <<Dev:64, Inode:64>> -> {ok, {Dev, Inode}}
+  catch
+    _:_ -> {error, badarg}
+  end.
 
 %%%---------------------------------------------------------------------------
 %%% connection socket
