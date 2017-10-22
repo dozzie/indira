@@ -11,7 +11,7 @@
 -behaviour(gen_server).
 
 %% public interface
--export([watch/2]).
+-export([watch/1]).
 
 %% supervision tree API
 -export([start/0, start_link/0]).
@@ -52,14 +52,14 @@ start_link() ->
 
 %% @doc Register a socket for unlinking after BEAM crash.
 
--spec watch(indira_af_unix:server_socket(), file:filename()) ->
+-spec watch(indira_af_unix:server_socket()) ->
   ok.
 
-watch(Socket, ListenPath) ->
-  {ok, {_Device, _Inode} = StatInfo} = indira_af_unix:stat(Socket),
+watch(Socket) ->
+  {ok, {Device, Inode, ListenPath}} = indira_af_unix:stat(Socket),
   {ok, CWD} = file:get_cwd(),
   AbsPath = filename:join(CWD, ListenPath),
-  gen_server:call(?MODULE, {register, Socket, StatInfo, AbsPath}).
+  gen_server:call(?MODULE, {register, Socket, {Device, Inode}, AbsPath}).
 
 %%%---------------------------------------------------------------------------
 %%% gen_server callbacks

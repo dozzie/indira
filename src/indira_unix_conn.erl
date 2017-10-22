@@ -80,8 +80,8 @@ start_link(Socket) ->
 %% @doc Initialize {@link gen_server} state.
 
 init([Socket] = _Args) ->
-  % TODO: socket address (path)
-  indira_log:set_context(unix, []),
+  {ok, {_Device, _Inode, Path}} = indira_af_unix:stat(Socket),
+  indira_log:set_context(unix, [{socket, Path}]),
   State = #state{socket = Socket},
   {ok, State}.
 

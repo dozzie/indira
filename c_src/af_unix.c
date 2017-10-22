@@ -405,6 +405,7 @@ ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
   ErlDrvTermData caller;
   uid_t uid;
   gid_t gid;
+  struct stat sock_info;
 
   switch (command) {
     case PORT_COMMAND_INIT_LISTEN: // {{{
@@ -432,7 +433,6 @@ ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
       // XXX: I know this is a race condition, but really, what can I do?
       // fstat() returns info from an abstract space, and I need info from
       // actual filesystem
-      struct stat sock_info;
       if (stat(context->address.sun_path, &sock_info) < 0) {
         // assume (*rbuf) is larger than ~20 bytes
         strcpy(*rbuf, erl_errno_id(errno));
@@ -470,6 +470,19 @@ ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
         strcpy(*rbuf, erl_errno_id(errno));
         return strlen(*rbuf);
       }
+
+      if (stat(context->address.sun_path, &sock_info) < 0) {
+        // assume (*rbuf) is larger than ~20 bytes
+        strcpy(*rbuf, erl_errno_id(errno));
+        return strlen(*rbuf);
+      }
+      if ((sock_info.st_mode & S_IFSOCK) != S_IFSOCK) {
+        // we lost the race to the socket file
+        strcpy(*rbuf, erl_errno_id(ESTALE));
+        return strlen(*rbuf);
+      }
+      context->sock_device = sock_info.st_dev;
+      context->sock_inode = sock_info.st_ino;
 
       return 0;
     break; // }}}
@@ -745,14 +758,21 @@ ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
     break; // }}}
 
     case PORT_COMMAND_STAT: // {{{
-      if (context->socket_type != listen_socket || context->fdlisten < 0 ||
+      if (context->socket_type == uninitialized ||
+          (context->socket_type == listen_socket && context->fdlisten < 0) ||
+          (context->socket_type == client_socket && context->fdconn < 0) ||
           len != 0)
         return -1;
 
+      size_t path_len = strlen(context->address.sun_path);
+      if (rlen < 2 * 8 + path_len)
+        *rbuf = driver_alloc(2 * 8 + path_len);
+
       store64((unsigned char *)(*rbuf), context->sock_device);
       store64((unsigned char *)(*rbuf + 8), context->sock_inode);
+      memcpy(*rbuf + 2 * 8, context->address.sun_path, path_len);
 
-      return 16;
+      return 2 * 8 + path_len;
     break; // }}}
   }
 

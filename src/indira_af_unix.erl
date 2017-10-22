@@ -225,14 +225,15 @@ chgrp(Socket, Group) when is_integer(Group), Group >= 0, Group =< 16#ffffffff ->
 chgrp(_Socket, _Group) ->
   {error, badarg}.
 
-%% @doc Retrieve device and inode number where the listening socket is placed.
+%% @doc Retrieve device and inode number where the socket is placed.
 
--spec stat(server_socket()) ->
-  {ok, {device(), inode()}} | {error, badarg}.
+-spec stat(socket()) ->
+  {ok, {device(), inode(), file:filename()}} | {error, badarg}.
 
 stat(Socket) ->
   try port_control(Socket, ?PORT_COMMAND_STAT, <<>>) of
-    <<Dev:64, Inode:64>> -> {ok, {Dev, Inode}}
+    <<Dev:64, Inode:64, Path/binary>> ->
+      {ok, {Dev, Inode, binary_to_list(Path)}}
   catch
     _:_ -> {error, badarg}
   end.
