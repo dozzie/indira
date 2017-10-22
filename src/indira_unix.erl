@@ -2,10 +2,33 @@
 %%% @doc
 %%%   AF_UNIX socket listener entry point and process.
 %%%
+%%%   The socket created will be a stream socket (`SOCK_STREAM' type).
+%%%
 %%%   == Indira parameter ==
 %%%
 %%%   This module expects a string `SocketPath' as a parameter (see
 %%%   {@link indira}).
+%%%
+%%%   This module accepts following listen address forms:
+%%%   <ul>
+%%%     <li>`SocketPath' ({@type file:filename()}) -- socket will be created
+%%%         with default permissions and ownership</li>
+%%%     <li>`{SocketPath, Mode}' (`Mode' is an integer of value `0' through
+%%%         `8#777') -- socket will have its mode changed to `Mode' with
+%%%         `chmod(2)' call</li>
+%%%     <li>`{SocketPath, Mode, User, Group}' (`User' and `Group' can be
+%%%         a string, non-negative integer, or atom `undefined') -- in
+%%%         addition to changed permissions, socket owner and group will be
+%%%         changed to the specified by user name or UID and group name or
+%%%         GID</li>
+%%%   </ul>
+%%%
+%%%   <b>NOTE</b>: Usually only root has permission to change socket owner.
+%%%
+%%%   <b>NOTE</b>: Permissions and ownership <em>are not set atomically</em>
+%%%   with socket creation. You most probably should defend against race
+%%%   conditions with permissions on the directory that will contain the
+%%%   socket.
 %%%
 %%%   == Returned errors ==
 %%%
@@ -18,8 +41,6 @@
 %%%     <li>`badarg' -- invalid socket path</li>
 %%%     <li>{@type inet:posix()}</li>
 %%%   </ul>
-%%%
-%%% @todo Support for mode and ownership.
 %%% @end
 %%%---------------------------------------------------------------------------
 
@@ -213,14 +234,46 @@ start_link(SocketPath) ->
 %% @private
 %% @doc Initialize {@link gen_server} state.
 
-init([SocketPath] = _Args) ->
+init([Address] = _Args) ->
+  {SocketPath, Mode, User, Group} = decode_address(Address),
   case indira_af_unix:listen(SocketPath, [binary, {packet, line}]) of
     {ok, Socket} ->
+      case Mode of
+        undefined -> ok;
+        _ -> ok = indira_af_unix:chmod(Socket, Mode)
+      end,
+      case User of
+        undefined -> ok;
+        _ -> ok = indira_af_unix:chown(Socket, User)
+      end,
+      case Group of
+        undefined -> ok;
+        _ -> ok = indira_af_unix:chgrp(Socket, Group)
+      end,
       State = #state{socket = Socket},
       {ok, State, 0};
     {error, Reason} ->
       {stop, Reason}
   end.
+
+%% @doc Decode listen address to a form usable by {@link init/1}.
+
+-spec decode_address(Address) ->
+  {Path, Mode | undefined, User | undefined, Group | undefined}
+  when Address :: Path
+                | {Path, Mode}
+                | {Path, Mode, User | undefined, Group | undefined},
+       Path :: file:filename(),
+       Mode :: 0 .. 8#7777,
+       User :: string() | binary() | non_neg_integer(),
+       Group :: string() | binary() | non_neg_integer().
+
+decode_address(Path) when is_list(Path); is_binary(Path) ->
+  {Path, undefined, undefined, undefined};
+decode_address({Path, Mode}) ->
+  {Path, Mode, undefined, undefined};
+decode_address({Path, Mode, User, Group}) ->
+  {Path, Mode, User, Group}.
 
 %% @private
 %% @doc Clean up {@link gen_server} state.
