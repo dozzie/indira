@@ -19,113 +19,128 @@
 %
 %-define(ADMIN_SOCKET_TYPE, indira_unix).
 %
-%-record(cmd, {
+%-record(opts, {
 %  op :: start | stop | get_pid,
 %  options :: [{atom(), term()}]
 %}).
 %
-%parse_arguments(Args, [DefAdminSocket, DefPidFile] = _Defaults) ->
-%  EmptyCommand = #cmd{
+%parse_arguments(Args, [DefAdminSocket, DefPidFile, DefConfig] = _Defaults) ->
+%  EmptyCommand = #opts{
 %    options = [
+%      {config, DefConfig},
 %      {socket, DefAdminSocket},
 %      {pidfile, DefPidFile}
 %    ]
 %  },
-%  case indira_cli:folds(fun cli_opt/2, EmptyCommand, Args) of
-%    {ok, #cmd{op = undefined}} ->
+%  case gen_indira_cli:folds(fun cli_opt/2, EmptyCommand, Args) of
+%    {ok, #opts{op = undefined}} ->
 %      help;
-%    {ok, Command = #cmd{op = start}} ->
-%      {ok, start, Command};
-%    {ok, Command = #cmd{op = Op, options = Options}} ->
-%      AdminSocketAddr = proplists:get_value(socket, Options),
-%      {send, {?ADMIN_SOCKET_TYPE, AdminSocketAddr}, Op, Command};
+%    {ok, Options = #opts{op = start}} ->
+%      {ok, start, Options};
+%    {ok, Options = #opts{op = Op, options = CLIOpts}} ->
+%      AdminSocketAddr = proplists:get_value(socket, CLIOpts),
+%      {send, {?ADMIN_SOCKET_TYPE, AdminSocketAddr}, Op, Options};
 %    {error, {help, _Arg}} ->
 %      help;
-%    {error, {Reason, Arg}} ->
-%      {error, {Reason, Arg}}
+%    {error, {_Reason, _Arg} = Error} ->
+%      {error, {help, Error}}
 %  end.
 %
-%handle_command(start = _Op, Command = #cmd{options = Options}) ->
-%  AdminSocketAddr = proplists:get_value(socket, Options),
-%  case configure_applications(Command) of
-%    {ok, IndiraOptions} ->
-%      indira_app:daemonize(example_app, [
+%handle_command(start = _Op, _Options = #opts{options = CLIOpts}) ->
+%  AdminSocketAddr = proplists:get_value(socket, CLIOpts),
+%  ConfigFile = proplists:get_value(config, CLIOpts),
+%  PidFile = proplists:get_value(pidfile, CLIOpts),
+%  case load_config(ConfigFile) of
+%    {ok, AppEnv, IndiraOptions} ->
+%      ok = indira:set_env(example_app, AppEnv),
+%      indira:daemonize(example_app, [
 %        {listen, [{?ADMIN_SOCKET_TYPE, AdminSocketAddr}]},
-%        {command, {example_command_handler, []}} |
+%        {command, {example_command_handler, []}},
+%        {pidfile, PidFile} |
 %        IndiraOptions
 %      ]);
 %    {error, Reason} ->
-%      {error, {configure, Reason}}
+%      {error, {load_config, Reason}}
 %  end.
 %
-%format_request(Op, _Command) ->
+%format_request(Op, _Options = #opts{}) ->
 %  Request = example_command_handler:format_request(Op),
 %  {ok, Request}.
 %
-%handle_reply(Reply, get_pid = _Op, _Command) ->
+%handle_reply(Reply, get_pid = _Op, _Options = #opts{}) ->
 %  case example_command_handler:decode_reply(Reply) of
 %    {ok, Pid} -> io:fwrite("~s~n", [Pid]), ok;
 %    {error, Message} -> {error, Message}
 %  end;
-%handle_reply(Reply, stop = _Op, _Command) ->
+%handle_reply(Reply, stop = _Op, _Options = #opts{}) ->
 %  % replies to `stop' are compatible with what is expected here
 %  example_command_handler:decode_reply(Reply).
 %
-%help(Script) ->
+%help(ScriptName) ->
 %  _Usage = [
 %    "Usage:\n",
-%    "  ", Script, " start   [--socket PATH] [--pidfile PATH]\n",
-%    "  ", Script, " stop    [--socket PATH]\n",
-%    "  ", Script, " get-pid [--socket PATH]\n"
+%    "  ", ScriptName, " start   [--socket PATH] [--pidfile PATH]\n",
+%    "  ", ScriptName, " stop    [--socket PATH]\n",
+%    "  ", ScriptName, " get-pid [--socket PATH]\n",
+%    ""
 %  ].
 %
-%cli_opt("-h",     _Command) -> {error, help};
-%cli_opt("--help", _Command) -> {error, help};
+%cli_opt("-h",     _Opts) -> {error, help};
+%cli_opt("--help", _Opts) -> {error, help};
 %
-%cli_opt("--socket", _Command) ->
+%cli_opt("--socket", _Opts) ->
 %  {need, 1};
-%cli_opt(["--socket", Path], Command = #cmd{options = Options}) ->
-%  _NewCommand = Command#cmd{options = [{socket, Path} | Options]};
+%cli_opt(["--socket", Path], Opts = #opts{options = Options}) ->
+%  _NewOpts = Opts#opts{options = [{socket, Path} | Options]};
 %
-%cli_opt("--pidfile", _Command) ->
+%cli_opt("--pidfile", _Opts) ->
 %  {need, 1};
-%cli_opt(["--pidfile", Path], Command = #cmd{options = Options}) ->
-%  _NewCommand = Command#cmd{options = [{pidfile, Path} | Options]};
+%cli_opt(["--pidfile", Path], Opts = #opts{options = Options}) ->
+%  _NewOpts = Opts#opts{options = [{pidfile, Path} | Options]};
 %
-%cli_opt("-" ++ _, _Command) ->
+%cli_opt("-" ++ _, _Opts) ->
 %  {error, unknown_option};
 %
-%cli_opt(Arg, Command = #cmd{op = undefined}) ->
+%cli_opt(Arg, Opts = #opts{op = undefined}) ->
 %  case Arg of
-%    "start"   -> _NewCommand = Command#cmd{op = start};
-%    "stop"    -> _NewCommand = Command#cmd{op = stop};
-%    "get-pid" -> _NewCommand = Command#cmd{op = get_pid};
+%    "start"   -> _NewOpts = Opts#opts{op = start};
+%    "stop"    -> _NewOpts = Opts#opts{op = stop};
+%    "get-pid" -> _NewOpts = Opts#opts{op = get_pid};
 %    _ -> {error, unknown_command}
 %  end;
 %
-%cli_opt(_Arg, _Command) ->
+%cli_opt(_Arg, _Opts) ->
 %  % not an option and the operation was already defined
 %  {error, excesive_argument}.
 %
-%configure_applications(Command = #cmd{options = Options}) ->
-%  case configure_example_app(Command) of
-%    ok ->
-%      PidFile = proplists:get_value(pidfile, Options),
-%      IndiraOptions = [
-%        {pidfile, PidFile}
-%        % maybe other options, like `workdir' or `start_after'
-%      ],
-%      {ok, IndiraOptions};
+%load_config(ConfigFile) ->
+%  case file:consult(ConfigFile) of
+%    {ok, Sections} ->
+%      AppDefault = indira:default_env(example_app),
+%      AppEnv = proplists:get_value(example_app, Sections, []),
+%      IndiraOptions = proplists:get_value(indira, Sections, []),
+%      {ok, AppEnv ++ AppDefault, IndiraOptions};
 %    {error, Reason} ->
 %      {error, Reason}
 %  end.
-%
-%configure_example_app(_Command) ->
-%  % this obviously is a stub; this would be an excellent place to load
-%  % INI/TOML/YAML file specified in command line and call
-%  % `indira_app:set_env/4' on data loaded from the config file
-%  ok.
 %'''
+%%%
+%%% Config file loaded by `load_config()' function above could look like this:
+%%%
+%```
+%{example_app, [
+%  % sequence of pairs {Key :: atom(), Value :: term()}, whatever the example
+%  % application `example_app' needs
+%]}.
+%
+%{indira, [
+%  {node_name, example_app},
+%  {name_type, shortnames},
+%  %{cookie, {file, "/etc/example_app/cookie.txt"}},
+%  {net_start, false}
+%]}.
+%'''
+%%%
 %%% @end
 %%%---------------------------------------------------------------------------
 

@@ -77,29 +77,45 @@
 %decode_reply([{<<"result">>, <<"ok">>}] = _Reply) ->
 %  ok;
 %decode_reply([{<<"pid">>, Pid}, {<<"result">>, <<"ok">>}] = _Reply) ->
-%  % when using `gen_indira_cli' or `indira_cli:send_one_command()', decoded
-%  % replies are orddict-compatible, so the keys in `Reply' are sorted
+%  % when using `gen_indira_cli' or `gen_indira_cli:send_one_command()',
+%  % decoded replies are orddict-compatible, so the keys in `Reply' are sorted
 %  {ok, Pid};
 %decode_reply([{<<"error">>, Message}] = _Reply) ->
 %  {error, Message}.
 %'''
 %%%
 %%%   This way all the knowledge about requests structure is in one place and
-%%%   the code for `escript' or {@link gen_indira_cli} uses much simpler
-%%%   interface:
+%%%   the code uses much simpler interface:
+%%%
+%%%   ==== escript ====
 %%%
 %```
-% % escript
-%Request = example_command_handler:format_request(get_pid),
-%{ok, Reply} = indira_cli:send_one_command(
-%  ?ADMIN_SOCK_MODULE, ?ADMIN_SOCK_ADDRESS,
-%  Request,
-%  []
-%),
-%{ok, Pid} = example_command_handler:decode_reply(Reply),
-%io:fwrite("~s~n", [Pid]).
+%#!/usr/bin/escript
 %
-% % gen_indira_cli
+%-define(ADMIN_SOCK_MODULE, ...).
+%-define(ADMIN_SOCK_ADDRESS, ...).
+%
+%main(_) ->
+%  Request = example_command_handler:format_request(get_pid),
+%  {ok, Reply} = gen_indira_cli:send_one_command(
+%    ?ADMIN_SOCK_MODULE, ?ADMIN_SOCK_ADDRESS,
+%    Request,
+%    []
+%  ),
+%  {ok, Pid} = example_command_handler:decode_reply(Reply),
+%  io:fwrite("~s~n", [Pid]).
+%'''
+%%%
+%%%   ==== gen_indira_cli ====
+%%%
+%```
+%-module(example_cli_handler).
+%
+%-behaviour(gen_indira_cli).
+%
+%-export([parse_arguments/2]).
+%-export([handle_command/2, format_request/2, handle_reply/3]).
+%
 %format_request(Op, _Command) when Op == stop; Op == get_pid ->
 %  Request = example_command_handler:format_request(Op),
 %  {ok, Request}.
@@ -125,8 +141,8 @@
 %  application:load(indira),
 %  application:set_env(indira, listen, [...]),
 %  application:set_env(indira, command, fun(C) -> handle_command_fun(C) end),
-%  indira_app:start_rec(indira),
-%  indira_app:sleep_forever().
+%  indira:start_rec(indira),
+%  indira:sleep_forever().
 %
 %handle_command_fun(<<"stop">> = _Command) ->
 %  init:stop(),

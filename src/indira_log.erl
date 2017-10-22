@@ -2,13 +2,13 @@
 %%% @doc
 %%%   Logging for Indira processes with unified messages.
 %%%
+%%%   This module is intended to be used by programmers writing custom
+%%%   {@link gen_indira_socket} modules.
+%%%
 %%%   Events logged with this module are all sent to {@link error_logger}.
 %%%   They will be logged as info/warning/error reports with type
 %%%   {@type @{indira, Type@}} and report being a {@type log_context()} with
 %%%   at least {@type @{message, string()@}} entry.
-%%%
-%%%   This module is intended to be used by programmers writing custom
-%%%   {@link gen_indira_socket} modules.
 %%% @end
 %%%---------------------------------------------------------------------------
 

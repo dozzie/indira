@@ -12,6 +12,19 @@
 %%%     <li>`` 'any' '' to indicate no binding to any particular interface</li>
 %%%   </ul>
 %%%
+%%%   === usage example ===
+%%%
+%```
+%indira:indira_setup([
+%  {listen, [
+%    {indira_udp, {"daemon.example.net", 1638}},
+%    {indira_udp, {{127,0,0,1}, 1639}},
+%    {indira_udp, {any, 1640}}
+%  ]},
+%  ...
+%]).
+%'''
+%%%
 %%%   == Returned errors ==
 %%%
 %%%   This module returns through

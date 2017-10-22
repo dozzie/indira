@@ -30,6 +30,18 @@
 %%%   conditions with permissions on the directory that will contain the
 %%%   socket.
 %%%
+%%%   === usage example ===
+%%%
+%```
+%indira:indira_setup([
+%  {listen, [
+%    {indira_unix, "/var/run/my_daemon/control"},
+%    {indira_unix, "/tmp/my_daemon.sock", 8#640, undefined, "adm"}
+%  ]},
+%  ...
+%]).
+%'''
+%%%
 %%%   == Returned errors ==
 %%%
 %%%   This module returns through

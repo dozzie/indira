@@ -2,6 +2,10 @@
 %%% @doc
 %%%   Behaviour for socket listener entry point.
 %%%
+%%%   This module is intended for people who want to implement their own
+%%%   administrative sockets, similar to {@link indira_unix},
+%%%   {@link indira_tcp}, and {@link indira_udp}.
+%%%
 %%%   Module implementing this behaviour is an entry point for Indira to spawn
 %%%   a listener, either directly a worker (e.g. for connection-less
 %%%   protocols) or a supervision subtree (e.g. for TCP).

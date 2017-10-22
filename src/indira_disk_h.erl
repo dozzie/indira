@@ -1,6 +1,14 @@
 %%%---------------------------------------------------------------------------
 %%% @doc
 %%%   Handler for {@link error_logger} to write events to a text file.
+%%%
+%%%   When added with {@link gen_event:add_handler/3} function, this module
+%%%   expects a one-element list containing output file name:
+%```
+%gen_event:add_handler(error_logger, indira_disk_h, [Filename]).
+%'''
+%%%
+%%%   This module can be used before Indira application starts.
 %%% @end
 %%%---------------------------------------------------------------------------
 
@@ -86,8 +94,8 @@ install(EventManager, File) ->
 install(EventManager, Id, File) ->
   gen_event:add_handler(EventManager, {?MODULE, Id}, [File]).
 
-%% @doc Remove from an event manager log handler installed with {@link
-%%   install/2}.
+%% @doc Remove from an event manager log handler installed with
+%%   {@link install/2}.
 %%
 %%   `EventManager' will usually be `error_logger'.
 
@@ -97,8 +105,8 @@ install(EventManager, Id, File) ->
 remove(EventManager) ->
   gen_event:delete_handler(EventManager, ?MODULE, []).
 
-%% @doc Remove from an event manager log handler installed with {@link
-%%   install/3}.
+%% @doc Remove from an event manager log handler installed with
+%%   {@link install/3}.
 %%
 %%   `EventManager' will usually be `error_logger'.
 

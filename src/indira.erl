@@ -1,6 +1,9 @@
 %%%---------------------------------------------------------------------------
 %%% @doc
-%%%   Indira interface for direct command line use.
+%%%   Functions for Erlang applications, including Indira itself.
+%%%
+%%% @see gen_indira_cli
+%%% @see gen_indira_command
 %%% @end
 %%%---------------------------------------------------------------------------
 

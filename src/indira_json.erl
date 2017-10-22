@@ -10,6 +10,8 @@
 %%%   Note that Erlang strings are generally recognized as arrays of integers.
 %%%   Note also that tuples alone are not allowed. They can only compose
 %%%   proplists that will be serialized to a JSON object.
+%%%
+%%%   This module can be used before Indira application starts.
 %%% @end
 %%%---------------------------------------------------------------------------
 

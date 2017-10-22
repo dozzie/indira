@@ -2,10 +2,8 @@
 @title Indira, Mother of Daemons.
 @version 0.9.0
 @see indira
-@see indira_app
-@see indira_cli
-@see gen_indira_command
 @see gen_indira_cli
+@see gen_indira_command
 @doc
 
 Indira is an application for turning Erlang applications into unix daemons
@@ -34,9 +32,10 @@ can listen on unix socket.
 You may also want to use Indira is if you want to configure an application
 with INI/TOML/YAML files and command line options, but preserve Erlang's
 original way of using application environment ({@link application:get_env/2}).
-Indira covers parsing command line arguments with {@link indira_cli:folds/3}
-and {@link indira_cli:foldg/3} functions, and simplifies setting environment
-parameters from configuration file with {@link indira_app:set_env/4}.
+Indira covers parsing command line arguments with
+{@link gen_indira_cli:folds/3} and {@link gen_indira_cli:foldg/3} functions,
+and simplifies setting environment parameters from configuration file with
+{@link indira:set_env/2} and {@link indira:default_env/1}.
 
 The things above allow to lower the Erlang proficiency requirements for
 sysadmins, give them convenient administrative interface, and distribute
@@ -106,72 +105,61 @@ $ my_example_daemon start &
 $ if my_example_daemon wait-until-started; then echo "OK"; else echo "FAIL"; fi
 '''
 
-The script can call {@link indira_cli:execute/3} function, providing a module
-that implements {@link gen_indira_cli} behaviour. This module will be
+The script can call {@link gen_indira_cli:execute/3} function, providing
+a module that implements {@link gen_indira_cli} behaviour. This module will be
 responsible for parsing the command line into a command, encoding the command
 so it can be sent to a running daemon, and processing the reply received from
 the daemon. There's also support for commands that don't fit into
 <i>send</i>-<i>receive</i>-<i>process</i> model, like starting the daemon.
 
-To facilitate parsing command line arguments, {@link indira_cli:folds/3} and
-{@link indira_cli:foldg/3} functions are provided.
+To facilitate parsing command line arguments, {@link gen_indira_cli:folds/3}
+and {@link gen_indira_cli:foldg/3} functions are provided.
 
 === Starting Erlang applications ===
 
 Applications are basically started using {@link application:start/2}. To help
 starting applications along with their dependencies, there is a helper
-function {@link indira_app:start_rec/2} (especially for older Erlang releases,
-which didn't have `application:ensure_all_started()').
+function {@link indira:start_rec/2} (especially for older Erlang releases,
+which didn't have `application:ensure_all_started()' function).
 
-Applications can be configured with {@link application:set_env/3}, preceded
-by {@link application:load/1} for each application. Again, to simplify this,
-there is a helper {@link indira_app:set_option/3}, which ensures that the
-application is loaded before setting environment option.
+{@link indira:set_env/2} and simplifies the process of configuring
+applications by adding, replacing, and removing parameters to make
+application's current environment equal to the specified one. This allows to
+load a configuration file (e.g. TOML) and validate all arguments, and only
+after that setting them all in one go. {@link indira:default_env/1} helps in
+building intended configuration by reading default values from the
+application.
 
-{@link indira_app:set_env/4} further simplifies the process of configuring
-applications. It's called with a structure with all the parameters loaded from
-config files and command line options and sets appropriate option for each
-expected parameter. The call is something like this:
-
-```
-% ConfigStruct = [{"key1", ...}, {"key2", ...}, ...]
-{ok, ConfigStruct} = load_config(File),
-SetSpecs = [
-  {"key1", {app1, key1}},
-  {"key2", {app1, key2}},
-  ...
-],
-indira_app:set_env(
-  fun proplists:get_value/2,
-  fun check_option/3,
-  ConfigStruct,
-  SetSpecs
-).
-'''
-
-Configuring Indira can be done this way, but there is another helper,
-{@link indira_app:indira_setup/1}. It has the same options as
-{@link indira_app:daemonize/2}, which combines `indira_setup()' and
+Configuring Indira can be done this way as well, but there is another helper,
+{@link indira:indira_setup/1}. It has the same options as
+{@link indira:daemonize/2}, which combines `indira_setup()' and
 `start_rec()' for Indira, apps to be started before and after Indira, and
 daemon's main application.
 
-This all fits with {@link indira_cli:execute/3} and {@link gen_indira_cli} as
-a clause of `handle_command()':
+This all fits with {@link gen_indira_cli:execute/3} and {@link gen_indira_cli}
+as a clause of `handle_command()':
 
 ```
 parse_arguments(Args, Defaults) ->
-  case indira_cli:folds(...) of
+  case gen_indira_cli:folds(...) of
     {ok, #options{op = start} = Options} ->
       {ok, start, Options};
     ...
   end.
 
-handle_command(start = _Command, Options) ->
-  % ...
-  configure_apps(Options), % somewhere there indira_app:set_env() is called
-  indira_app:daemonize(my_application, [
-    ...
-  ]).
+handle_command(start = _Command,
+               Options = #options{config = Config, socket = SocketPath}) ->
+  case load_config(Config) of
+    {ok, AppEnv, IndiraOpts} ->
+      ok = indira:set_env(my_application, AppEnv),
+      indira:daemonize(my_application, [
+        {listen, [{indira_unix, SocketPath}]},
+        {command, {my_application_command_handler, []}} |
+        IndiraOpts
+      ]);
+    {error, Reason} ->
+      {error, Reason}
+  end.
 '''
 
 === Administrative channel ===
@@ -193,7 +181,7 @@ extending administrative commands set.
 == Further reading ==
 
 <ul>
-  <li>{@link indira_app}, {@link indira_cli} -- functions for use in `escript'
+  <li>{@link indira}, {@link gen_indira_cli} -- functions for use in `escript'
       scripts</li>
   <li>{@link gen_indira_cli} -- behaviour to parse command line and carry out
       operations specified in it</li>

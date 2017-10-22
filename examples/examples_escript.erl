@@ -19,10 +19,12 @@
 %  io:fwrite("Usage: ~s start|stop|get-pid~n", [escript:script_name()]);
 %
 %main(["start"]) ->
-%  indira_app:set_option(indira, listen, [{?ADMIN_SOCK_MODULE, ?ADMIN_SOCK_ADDRESS}]),
-%  indira_app:set_option(indira, command, fun(C) -> handle_command_fun(C) end),
-%  indira_app:start_rec(indira),
-%  indira_app:sleep_forever();
+%  indira:indira_setup([
+%    {listen, [{?ADMIN_SOCK_MODULE, ?ADMIN_SOCK_ADDRESS}]},
+%    {command, fun(C) -> handle_command_fun(C) end}
+%  ]),
+%  indira:start_rec(indira),
+%  indira:sleep_forever();
 %
 %main(["get-pid"]) ->
 %  case send_request([{command, get_pid}]) of
@@ -47,13 +49,13 @@
 %  end.
 %
 %send_request(Request) ->
-%  indira_cli:send_one_command(
+%  gen_indira_cli:send_one_command(
 %    ?ADMIN_SOCK_MODULE, ?ADMIN_SOCK_ADDRESS,
 %    Request,
 %    []
 %  ).
 %send_request(Request, Timeout) ->
-%  indira_cli:send_one_command(
+%  gen_indira_cli:send_one_command(
 %    ?ADMIN_SOCK_MODULE, ?ADMIN_SOCK_ADDRESS,
 %    Request,
 %    [{timeout, Timeout}]
@@ -81,13 +83,16 @@
 %```
 %#!/usr/bin/escript
 %
+%-define(CLI_MODULE, example_cli_handler).
+%-define(CONFIG_FILE,  "/etc/example_app/example.conf").
 %-define(ADMIN_SOCKET, "/var/run/example_app/control").
 %-define(PIDFILE,      "/var/run/example_app/pid").
 %
 %help() ->
 %  help(standard_io).
 %help(IO) ->
-%  io:put_chars(IO, example_cli_handler:help(escript:script_name())).
+%  ScriptName = filename:basename(escript:script_name()),
+%  io:put_chars(IO, ?CLI_MODULE:help(ScriptName)).
 %
 %main([])         -> help();
 %main(["-h"])     -> help();
@@ -95,18 +100,21 @@
 %
 %main(Args) ->
 %  % this is a good idea to keep default paths away from the compiled module
-%  Defaults = [?ADMIN_SOCKET, ?PIDFILE],
-%  case indira_cli:execute(Args, example_cli_handler, Defaults) of
+%  Defaults = [?ADMIN_SOCKET, ?PIDFILE, ?CONFIG_FILE],
+%  case gen_indira_cli:execute(Args, ?CLI_MODULE, Defaults) of
 %    ok ->
 %      ok;
 %    help ->
 %      help();
-%    {error, {arguments, Reason}} ->
-%      io:fwrite(standard_error, "~p~n~n", [Reason]),
+%    {error, {help, Reason}} ->
+%      io:fwrite(standard_error, "~s~n~n", [?CLI_MODULE:format_error(Reason)]),
 %      help(standard_error),
 %      halt(1);
+%    {error, Code} when is_integer(Code) ->
+%      % error already written to STDERR
+%      halt(Code);
 %    {error, Reason} ->
-%      io:fwrite(standard_error, "~p~n", [Reason]),
+%      io:fwrite(standard_error, "~s~n", [?CLI_MODULE:format_error(Reason)]),
 %      halt(1)
 %  end.
 %'''

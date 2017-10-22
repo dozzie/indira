@@ -1,6 +1,8 @@
 %%%---------------------------------------------------------------------------
 %%% @doc
 %%%   Syslog connection handles and message formatting.
+%%%
+%%%   This module can be used before Indira application starts.
 %%% @end
 %%%---------------------------------------------------------------------------
 
@@ -80,7 +82,7 @@
 %%   Returned data doesn't contain trailing newline. Note that it also doesn't
 %%   contain hostname, as this is added by syslog daemon.
 
--spec format(facility(), priority(), ident(), iolist()) ->
+-spec format(facility(), priority(), ident(), iolist() | binary()) ->
   iolist().
 
 format(Facility, Priority, Ident, Message) ->
@@ -93,7 +95,8 @@ format(Facility, Priority, Ident, Message) ->
 %%
 %%   Returned data doesn't contain trailing newline.
 
--spec format(facility(), hostname(), priority(), ident(), iolist()) ->
+-spec format(facility(), hostname(), priority(), ident(),
+             iolist() | binary()) ->
   iolist().
 
 format(Facility, Hostname, Priority, Ident, Message) ->
@@ -166,7 +169,7 @@ encode(Facility, Priority) when is_atom(Facility), is_atom(Priority) ->
 
 %% @doc Convert atom describing priority to number or the reverse.
 %%
-%% @spec priority(integer() | priority()) ->
+%% @spec priority(Priority :: integer() | priority()) ->
 %%   priority() | integer()
 
 -spec priority(integer()) -> priority();
@@ -191,7 +194,7 @@ priority(debug)   -> 7. % debug-level messages
 
 %% @doc Convert atom describing facility to number or the reverse.
 %%
-%% @spec facility(integer() | facility()) ->
+%% @spec facility(Facility :: integer() | facility()) ->
 %%   facility() | integer()
 
 -spec facility(integer()) -> facility();
@@ -291,7 +294,7 @@ open_remote(Host, Port) when is_tuple(Host) ->
 
 %% @doc Send a line to syslog.
 
--spec send(connection(), iolist()) ->
+-spec send(connection(), iolist() | binary()) ->
   ok | {error, term()}.
 
 send({unix, Socket} = _Syslog, Message) ->
