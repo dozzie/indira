@@ -295,7 +295,7 @@ set_indira_options([reload | Rest] = _Aspects, Options) ->
   end;
 set_indira_options([pidfile | Rest] = _Aspects, Options) ->
   case proplists:get_value(pidfile, Options) of
-    PidFile when is_list(PidFile) orelse is_binary(PidFile) ->
+    PidFile when is_list(PidFile); is_binary(PidFile) ->
       application:set_env(indira, pidfile, PidFile),
       set_indira_options(Rest, Options);
     undefined ->
@@ -374,7 +374,7 @@ when (NameType == shortnames orelse NameType == longnames),
     %  ok;
     _ when is_atom(Cookie) ->
       ok;
-    {file, CookieFile} when is_list(CookieFile) orelse is_binary(CookieFile) ->
+    {file, CookieFile} when is_list(CookieFile); is_binary(CookieFile) ->
       ok;
     _ ->
       {error, invalid_net_config}
