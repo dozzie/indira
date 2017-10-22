@@ -45,7 +45,7 @@
 %%% types {{{
 
 -define(UNIX_LISTEN_INTERVAL, 100).
--define(MAX_LINE_LENGTH, 1048576). % 1MB
+-define(MAX_LINE_LENGTH, 64 * 1024 * 1024).
 
 -record(state, {
   socket :: indira_af_unix:server_socket()
