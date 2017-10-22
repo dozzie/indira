@@ -18,6 +18,7 @@
 
 %% server socket API
 -export([listen/2, accept/1, accept/2]).
+-export([chmod/2, chown/2, chgrp/2]).
 %% connection socket API
 -export([connect/2, send/2, recv/2, recv/3]).
 %% common to server and connection sockets
@@ -44,6 +45,11 @@
 -define(PORT_COMMAND_RECV_CANCEL,   5).
 -define(PORT_COMMAND_SETOPTS,       6).
 -define(PORT_COMMAND_GETOPTS,       7).
+-define(PORT_COMMAND_CHMOD,         8).
+-define(PORT_COMMAND_CHOWN_USER,    9).
+-define(PORT_COMMAND_CHOWN_UID,    10).
+-define(PORT_COMMAND_CHGRP_GROUP,  11).
+-define(PORT_COMMAND_CHGRP_GID,    12).
 
 %%%---------------------------------------------------------------------------
 
@@ -179,6 +185,40 @@ accept(Socket, Timeout) when is_integer(Timeout), Timeout >= 0 ->
       {error, Reason}
   end;
 accept(_Socket, _Timeout) ->
+  {error, badarg}.
+
+%% @doc Change permissions of a listening socket.
+
+-spec chmod(server_socket(), non_neg_integer()) ->
+  ok | {error, badarg | inet:posix()}.
+
+chmod(Socket, Mode) when is_integer(Mode), Mode >= 0, Mode =< 8#7777 ->
+  control_port(Socket, ?PORT_COMMAND_CHMOD, <<Mode:16>>);
+chmod(_Socket, _Mode) ->
+  {error, badarg}.
+
+%% @doc Change owner of a listening socket.
+
+-spec chown(server_socket(), string() | binary() | non_neg_integer()) ->
+  ok | {error, badarg | nxuser | inet:posix()}.
+
+chown(Socket, User) when is_list(User); is_binary(User) ->
+  control_port(Socket, ?PORT_COMMAND_CHOWN_USER, User);
+chown(Socket, User) when is_integer(User), User >= 0, User =< 16#ffffffff ->
+  control_port(Socket, ?PORT_COMMAND_CHOWN_UID, <<User:32>>);
+chown(_Socket, _User) ->
+  {error, badarg}.
+
+%% @doc Change group of a listening socket.
+
+-spec chgrp(server_socket(), string() | binary() | non_neg_integer()) ->
+  ok | {error, badarg | nxgroup | inet:posix()}.
+
+chgrp(Socket, Group) when is_list(Group); is_binary(Group) ->
+  control_port(Socket, ?PORT_COMMAND_CHGRP_GROUP, Group);
+chgrp(Socket, Group) when is_integer(Group), Group >= 0, Group =< 16#ffffffff ->
+  control_port(Socket, ?PORT_COMMAND_CHGRP_GID, <<Group:32>>);
+chgrp(_Socket, _Group) ->
   {error, badarg}.
 
 %%%---------------------------------------------------------------------------

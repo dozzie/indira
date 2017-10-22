@@ -6,6 +6,7 @@
 
 #include <stdint.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <sys/uio.h>
 #include <sys/socket.h>
@@ -16,6 +17,8 @@
 #include <limits.h>
 #include <string.h>
 #include <ctype.h>
+#include <pwd.h>
+#include <grp.h>
 
 // }}}
 //----------------------------------------------------------
@@ -60,6 +63,11 @@
 #define PORT_COMMAND_RECV_CANCEL    5
 #define PORT_COMMAND_SETOPTS        6
 #define PORT_COMMAND_GETOPTS        7
+#define PORT_COMMAND_CHMOD          8
+#define PORT_COMMAND_CHOWN_USER     9
+#define PORT_COMMAND_CHOWN_UID     10
+#define PORT_COMMAND_CHGRP_GROUP   11
+#define PORT_COMMAND_CHGRP_GID     12
 
 // }}}
 //----------------------------------------------------------
@@ -175,6 +183,9 @@ static uint32_t packet_get(struct packet *ctx, char **resbuf, ErlDrvBinary **res
 static uint16_t unpack16(unsigned char *buf);
 static uint32_t unpack32(unsigned char *buf);
 static void store32(unsigned char *buf, uint32_t value);
+
+static int find_uid(const char *name, size_t name_len, uid_t *uid);
+static int find_gid(const char *name, size_t name_len, gid_t *gid);
 
 // atoms
 static ErlDrvTermData atom_ok;
@@ -386,6 +397,8 @@ ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
 
   uint32_t flags;
   ErlDrvTermData caller;
+  uid_t uid;
+  gid_t gid;
 
   switch (command) {
     case PORT_COMMAND_INIT_LISTEN: // {{{
@@ -591,6 +604,9 @@ ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
     break; // }}}
 
     case PORT_COMMAND_GETOPTS: // {{{
+      if (context->socket_type == uninitialized || len != 0)
+        return -1;
+
       flags = 0;
       switch (context->data_mode) {
         case string: flags |= 0x0001; break;
@@ -617,6 +633,92 @@ ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
       store32((unsigned char *)(*rbuf) + 4, context->max_packet_size);
 
       return 8;
+    break; // }}}
+
+    case PORT_COMMAND_CHMOD: // {{{
+      if (context->socket_type != listen_socket || context->fdlisten < 0 ||
+          len != 2)
+        return -1;
+
+      if (chmod(context->address.sun_path, unpack16((unsigned char *)buf)) < 0) {
+        // assume (*rbuf) is larger than ~20 bytes
+        strcpy(*rbuf, erl_errno_id(errno));
+        return strlen(*rbuf);
+      }
+
+      return 0;
+    break; // }}}
+
+    case PORT_COMMAND_CHOWN_UID: // {{{
+      if (context->socket_type != listen_socket || context->fdlisten < 0 ||
+          len != 4)
+        return -1;
+
+      uid = unpack32((unsigned char *)buf);
+
+      if (chown(context->address.sun_path, uid, -1) < 0) {
+        // assume (*rbuf) is larger than ~20 bytes
+        strcpy(*rbuf, erl_errno_id(errno));
+        return strlen(*rbuf);
+      }
+
+      return 0;
+    break; // }}}
+
+    case PORT_COMMAND_CHOWN_USER: // {{{
+      if (context->socket_type != listen_socket || context->fdlisten < 0 ||
+          len == 0)
+        return -1;
+
+      if (find_uid(buf, len, &uid) < 0) {
+        // assume (*rbuf) is larger than ~20 bytes
+        strcpy(*rbuf, "nxuser");
+        return strlen(*rbuf);
+      }
+
+      if (chown(context->address.sun_path, uid, -1) < 0) {
+        // assume (*rbuf) is larger than ~20 bytes
+        strcpy(*rbuf, erl_errno_id(errno));
+        return strlen(*rbuf);
+      }
+
+      return 0;
+    break; // }}}
+
+    case PORT_COMMAND_CHGRP_GID: // {{{
+      if (context->socket_type != listen_socket || context->fdlisten < 0 ||
+          len != 4)
+        return -1;
+
+      gid = unpack32((unsigned char *)buf);
+
+      if (chown(context->address.sun_path, -1, gid) < 0) {
+        // assume (*rbuf) is larger than ~20 bytes
+        strcpy(*rbuf, erl_errno_id(errno));
+        return strlen(*rbuf);
+      }
+
+      return 0;
+    break; // }}}
+
+    case PORT_COMMAND_CHGRP_GROUP: // {{{
+      if (context->socket_type != listen_socket || context->fdlisten < 0 ||
+          len == 0)
+        return -1;
+
+      if (find_gid(buf, len, &gid) < 0) {
+        // assume (*rbuf) is larger than ~20 bytes
+        strcpy(*rbuf, "nxgroup");
+        return strlen(*rbuf);
+      }
+
+      if (chown(context->address.sun_path, -1, gid) < 0) {
+        // assume (*rbuf) is larger than ~20 bytes
+        strcpy(*rbuf, erl_errno_id(errno));
+        return strlen(*rbuf);
+      }
+
+      return 0;
     break; // }}}
   }
 
@@ -1338,6 +1440,66 @@ void store32(unsigned char *buf, uint32_t value)
   buf[1] = 0xff & (value >> (8 * 2));
   buf[2] = 0xff & (value >> (8 * 1));
   buf[3] = 0xff & (value >> (8 * 0));
+}
+
+// }}}
+//----------------------------------------------------------------------------
+// lookup UID/GID {{{
+
+static
+int find_uid(const char *name, size_t name_len, uid_t *uid)
+{
+  char user_name[4096];
+  if (name_len > sizeof(user_name) - 1) {
+    errno = ENAMETOOLONG;
+    return -1;
+  }
+  memcpy(user_name, name, name_len);
+  user_name[name_len] = 0;
+
+  long buffer_size = sysconf(_SC_GETPW_R_SIZE_MAX);
+  if (buffer_size < 0)
+    buffer_size = 4096;
+  char buffer[buffer_size];
+
+  struct passwd entry;
+  struct passwd *result = NULL;
+  errno = 0;
+  if (getpwnam_r(user_name, &entry, buffer, buffer_size, &result) == 0 &&
+      result != NULL) {
+    *uid = entry.pw_uid;
+    return 0;
+  } else {
+    return -1;
+  }
+}
+
+static
+int find_gid(const char *name, size_t name_len, gid_t *gid)
+{
+  char group_name[4096];
+  if (name_len > sizeof(group_name) - 1) {
+    errno = ENAMETOOLONG;
+    return -1;
+  }
+  memcpy(group_name, name, name_len);
+  group_name[name_len] = 0;
+
+  long buffer_size = sysconf(_SC_GETGR_R_SIZE_MAX);
+  if (buffer_size < 0)
+    buffer_size = 4096;
+  char buffer[buffer_size];
+
+  struct group entry;
+  struct group *result = NULL;
+  errno = 0;
+  if (getgrnam_r(group_name, &entry, buffer, buffer_size, &result) == 0 &&
+      result != NULL) {
+    *gid = entry.gr_gid;
+    return 0;
+  } else {
+    return -1;
+  }
 }
 
 // }}}
