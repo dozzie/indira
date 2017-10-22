@@ -34,6 +34,7 @@
   | {command, {module(), term()}}
   | {reload, {Mod :: module(), Fun :: atom(), Args :: [term()]}}
   | {pidfile, file:filename() | undefined}
+  | {workdir, file:filename() | undefined}
   | {node_name, node() | undefined}
   | {name_type, shortnames | longnames | undefined}
   | {cookie, none | undefined | atom() | {file, file:filename()}}
@@ -225,6 +226,7 @@ default_env(App) when is_atom(App) ->
                | invalid_command_handler
                | invalid_reload_function
                | invalid_pidfile
+               | invalid_workdir
                | invalid_net_config
                | invalid_net_start.
 
@@ -234,8 +236,8 @@ indira_setup(Options) ->
     ok -> ok;
     {error, {already_loaded, indira}} -> ok
   end,
-  case set_indira_options([listen, command, reload, pidfile, net, net_start,
-                           apps], Options) of
+  Aspects = [listen, command, reload, pidfile, workdir, net, net_start, apps],
+  case set_indira_options(Aspects, Options) of
     ok -> ok;
     {error, Reason} -> {error, {indira, Reason}}
   end.
@@ -251,6 +253,7 @@ indira_setup(Options) ->
                | invalid_command_handler
                | invalid_reload_function
                | invalid_pidfile
+               | invalid_workdir
                | invalid_net_config
                | invalid_net_start.
 
@@ -302,6 +305,16 @@ set_indira_options([pidfile | Rest] = _Aspects, Options) ->
       set_indira_options(Rest, Options);
     _ ->
       {error, invalid_pidfile}
+  end;
+set_indira_options([workdir | Rest] = _Aspects, Options) ->
+  case proplists:get_value(workdir, Options) of
+    Workdir when is_list(Workdir); is_binary(Workdir) ->
+      application:set_env(indira, workdir, Workdir),
+      set_indira_options(Rest, Options);
+    undefined ->
+      set_indira_options(Rest, Options);
+    _ ->
+      {error, invalid_workdir}
   end;
 set_indira_options([net | Rest] = _Aspects, Options) ->
   NodeName = proplists:get_value(node_name, Options),
