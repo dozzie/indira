@@ -25,7 +25,7 @@ link_verbose = $(link_verbose_$(V))
 # entry points for erlang.mk
 
 OUTDIR ?= ../priv
-TARGETS = $(OUTDIR)/af_unix_drv.so
+TARGETS = $(OUTDIR)/indira_af_unix_drv.so
 
 .PHONY: all clean
 
@@ -39,13 +39,10 @@ clean:
 
 SOURCES = af_unix.c
 HEADERS =
-#SOURCES = af_unix.c int_pack.c signal_names.c
-#HEADERS = int_pack.h signal_names.h
 
 AF_UNIX_OBJS = af_unix.o
-#AF_UNIX_OBJS = af_unix.o int_pack.o signal_names.o
 
-$(OUTDIR)/af_unix_drv.so: $(AF_UNIX_OBJS)
+$(OUTDIR)/indira_af_unix_drv.so: $(AF_UNIX_OBJS)
 	$(link_verbose) $(CC) -fPIC -shared $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 %.o: %.c

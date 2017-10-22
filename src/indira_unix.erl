@@ -20,8 +20,6 @@
 %%%   </ul>
 %%%
 %%% @todo Support for mode and ownership.
-%%% @todo Set `{active,once}' option, once it arrives to {@link
-%%%   indira_af_unix}.
 %%% @end
 %%%---------------------------------------------------------------------------
 
@@ -82,24 +80,30 @@ child_spec(SocketPath) ->
   {ok, iolist()} | {error, term()}.
 
 send_one_line(SocketPath, Line, Timeout) ->
-  case indira_af_unix:connect(SocketPath, [{active, false}]) of
+  indira_af_unix:load_port_driver(),
+  case indira_af_unix:connect(SocketPath, [binary, {active, false}]) of
     {ok, Sock} ->
       case indira_af_unix:send(Sock, [Line, $\n]) of
         ok ->
           try
             ReplyLine = recv_line(Sock, ?MAX_LINE_LENGTH, Timeout),
             indira_af_unix:close(Sock),
+            indira_af_unix:unload_port_driver(),
             {ok, ReplyLine}
           catch
             error:Reason ->
+              indira_af_unix:close(Sock),
+              indira_af_unix:unload_port_driver(),
               {error, Reason}
           end;
         {error, badarg} ->
           % closed socket; pretend it was "connection reset" error
           indira_af_unix:close(Sock),
+          indira_af_unix:unload_port_driver(),
           {error, econnreset}
       end;
     {error, Reason} ->
+      indira_af_unix:unload_port_driver(),
       {error, Reason}
   end.
 
@@ -114,7 +118,8 @@ send_one_line(SocketPath, Line, Timeout) ->
 recv_line(_Socket, MaxLength, _Timeout) when MaxLength =< 0 ->
   erlang:error(emsgsize);
 recv_line(Socket, MaxLength, Timeout) ->
-  case indira_af_unix:recv(Socket, MaxLength, Timeout) of
+  indira_af_unix:setopts(Socket, [{packet_size, MaxLength}]),
+  case indira_af_unix:recv(Socket, 0, Timeout) of
     {ok, Chunk} ->
       case binary:last(Chunk) of
         $\n -> [Chunk];
@@ -209,7 +214,7 @@ start_link(SocketPath) ->
 %% @doc Initialize {@link gen_server} state.
 
 init([SocketPath] = _Args) ->
-  case indira_af_unix:listen(SocketPath) of
+  case indira_af_unix:listen(SocketPath, [binary, {packet, line}]) of
     {ok, Socket} ->
       State = #state{socket = Socket},
       {ok, State, 0};
