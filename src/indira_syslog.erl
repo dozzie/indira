@@ -257,14 +257,17 @@ facility(local7)   -> 23. % reserved for local use
   {ok, connection()} | {error, term()}.
 
 open_local(SocketPath) ->
-  % skip loading port driver if Indira is already running
-  case whereis(indira_af_unix_manager) of
-    undefined -> indira_af_unix:load_port_driver();
-    Pid when is_pid(Pid) -> ok
-  end,
+  ok = indira_af_unix:load_port_driver(),
   case indira_af_unix:connect(SocketPath, [{active, false}]) of
-    {ok, Socket}    -> {ok, {unix, Socket}};
-    {error, Reason} -> {error, Reason}
+    {ok, Socket} ->
+      % XXX: port driver will actually be freed when the (last) socket is
+      % closed, and this way we avoid the load/unload counting errors on
+      % transferring port ownership (`controlling_process()')
+      indira_af_unix:unload_port_driver(),
+      {ok, {unix, Socket}};
+    {error, Reason} ->
+      indira_af_unix:unload_port_driver(),
+      {error, Reason}
   end.
 
 %% @doc Open connection to remote syslog (UDP).
@@ -329,7 +332,6 @@ controlling_process({udp, Socket, {_Host, _Port}} = _Syslog, Pid) ->
 
 close({unix, Socket} = _Syslog) ->
   indira_af_unix:close(Socket),
-  indira_af_unix:unload_port_driver(),
   ok;
 
 close({udp, Socket, {_Host, _Port}} = _Syslog) ->
