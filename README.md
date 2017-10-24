@@ -36,6 +36,13 @@ sysadmins, give them convenient administrative interface, and distribute
 Erlang applications in binary packages in easier and much more elegant way
 than before.
 
+Documentation
+-------------
+
+Indira is documented using EDoc. A local copy is generated with `make doc`
+command to `./doc/` directory. An already generated online copy is available
+at <http://dozzie.jarowit.net/api/erlang-indira/>.
+
 Contact and License
 -------------------
 
