@@ -113,53 +113,24 @@ child_spec(SocketPath) ->
   {ok, iolist()} | {error, term()}.
 
 send_one_line(SocketPath, Line, Timeout) ->
-  indira_af_unix:load_port_driver(),
-  case indira_af_unix:connect(SocketPath, [binary, {active, false}]) of
+  ok = indira_af_unix:load_port_driver(),
+  ConnectOpts = [binary, {active, false}, {packet_size, ?MAX_LINE_LENGTH}],
+  case indira_af_unix:connect(SocketPath, ConnectOpts) of
     {ok, Sock} ->
-      case indira_af_unix:send(Sock, [Line, $\n]) of
-        ok ->
-          try
-            ReplyLine = recv_line(Sock, ?MAX_LINE_LENGTH, Timeout),
-            indira_af_unix:close(Sock),
-            indira_af_unix:unload_port_driver(),
-            {ok, ReplyLine}
-          catch
-            error:Reason ->
-              indira_af_unix:close(Sock),
-              indira_af_unix:unload_port_driver(),
-              {error, Reason}
-          end;
-        {error, badarg} ->
-          % closed socket; pretend it was "connection reset" error
+      indira_af_unix:send(Sock, [Line, $\n]),
+      case indira_af_unix:recv(Sock, 0, Timeout) of
+        {ok, ReplyLine} ->
           indira_af_unix:close(Sock),
           indira_af_unix:unload_port_driver(),
-          {error, econnreset}
+          {ok, ReplyLine};
+        {error, Reason} ->
+          indira_af_unix:close(Sock),
+          indira_af_unix:unload_port_driver(),
+          {error, Reason}
       end;
     {error, Reason} ->
       indira_af_unix:unload_port_driver(),
       {error, Reason}
-  end.
-
-%% @doc Read a line from a socket.
-%%
-%%   Function raises an {@link erlang:error/1} on read errors.
-
--spec recv_line(indira_af_unix:connection_socket(), non_neg_integer(),
-                timeout()) ->
-  iolist() | no_return().
-
-recv_line(_Socket, MaxLength, _Timeout) when MaxLength =< 0 ->
-  erlang:error(emsgsize);
-recv_line(Socket, MaxLength, Timeout) ->
-  indira_af_unix:setopts(Socket, [{packet_size, MaxLength}]),
-  case indira_af_unix:recv(Socket, 0, Timeout) of
-    {ok, Chunk} ->
-      case binary:last(Chunk) of
-        $\n -> [Chunk];
-        _ -> [Chunk | recv_line(Socket, MaxLength - size(Chunk), Timeout)]
-      end;
-    {error, Reason} ->
-      erlang:error(Reason)
   end.
 
 %% }}}
