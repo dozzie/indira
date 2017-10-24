@@ -26,7 +26,7 @@
 
 -record(state, {
   sockets :: ets:tab(), % port() -> Device, Inode, Path
-  unlinker :: port()
+  unlinker :: port() | undefined
 }).
 
 %%% }}}
@@ -72,8 +72,17 @@ watch(Socket) ->
 %% @doc Initialize {@link gen_server} state.
 
 init(_Args) ->
-  case start_unlinker() of
-    {ok, Port} ->
+  case unlinker_needed() of
+    true ->
+      case start_unlinker() of
+        {ok, Port} -> ok;
+        {error, _Reason} = Port -> error
+      end;
+    false ->
+      Port = undefined
+  end,
+  case Port of
+    _ when is_port(Port); Port == undefined ->
       indira_af_unix:load_port_driver(),
       process_flag(trap_exit, true),
       Table = ets:new(sockets, [set]),
@@ -83,7 +92,9 @@ init(_Args) ->
       },
       {ok, State};
     {error, bad_name} ->
-      {stop, {missing_application, indira}}
+      {stop, {missing_application, indira}};
+    {error, Reason} ->
+      {stop, Reason}
   end.
 
 %% @private
@@ -102,8 +113,20 @@ terminate(_Arg, _State = #state{unlinker = Port, sockets = Table}) ->
 %% @private
 %% @doc Handle {@link gen_server:call/2}.
 
+handle_call({register, _, _, _} = Request, From,
+            State = #state{unlinker = undefined}) ->
+  % start unlinker and retry handling the request
+  case start_unlinker() of
+    {ok, Port} ->
+      NewState = State#state{unlinker = Port},
+      handle_call(Request, From, NewState);
+    {error, Reason} ->
+      {stop, Reason}
+  end;
+
 handle_call({register, Socket, {_,_} = StatInfo, SocketPath} = _Request, _From,
-            State = #state{unlinker = Port, sockets = Table}) ->
+            State = #state{unlinker = Port, sockets = Table})
+when is_port(Port) ->
   try link(Socket) of
     _ ->
       ets:insert(Table, {Socket, StatInfo, SocketPath}),
@@ -166,6 +189,19 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%---------------------------------------------------------------------------
 
+%% @doc Check if unlinker will be required according to Indira configuration.
+
+-spec unlinker_needed() ->
+  boolean().
+
+unlinker_needed() ->
+  case application:get_env(listen) of
+    {ok, Sockets} ->
+      lists:any(fun({indira_unix, _}) -> true; (_) -> false end, Sockets);
+    undefined -> % this should never happen
+      false
+  end.
+
 %% @doc Start unlinker process.
 
 -spec start_unlinker() ->
@@ -190,9 +226,11 @@ start_unlinker() ->
 
 %% @doc Stop unlinker process.
 
--spec stop_unlinker(port()) ->
+-spec stop_unlinker(port() | undefined) ->
   any().
 
+stop_unlinker(undefined = _Port) ->
+  ignore;
 stop_unlinker(Port) ->
   try
     port_close(Port)
