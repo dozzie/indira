@@ -406,6 +406,13 @@ ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
   uid_t uid;
   gid_t gid;
   struct stat sock_info;
+  int error;
+  uint32_t read_size;
+  size_t path_len;
+
+  enum data_mode data_mode;
+  enum read_mode read_mode;
+  enum packet_mode packet_mode;
 
   switch (command) {
     case PORT_COMMAND_INIT_LISTEN: // {{{
@@ -493,7 +500,6 @@ ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
 
       caller = driver_caller(context->erl_port);
 
-      int error = 0;
       if (cdrv_set_accepting(context, caller, &error) != 0)
         cdrv_send_error(context->erl_port, caller, error);
       // on success, `cdrv_ready_input()' sends a reply
@@ -524,7 +530,7 @@ ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
 
       caller = driver_caller(context->erl_port);
 
-      uint32_t read_size = unpack32((unsigned char *)buf);
+      read_size = unpack32((unsigned char *)buf);
       if (read_size != 0 && context->packet_mode != raw) {
         // reading a specific number of bytes only allowed for raw packet mode
         cdrv_send_error(context->erl_port, caller, EINVAL);
@@ -568,10 +574,6 @@ ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
     case PORT_COMMAND_SETOPTS: // {{{
       if (context->socket_type == uninitialized || len != 8)
         return -1;
-
-      enum data_mode data_mode;
-      enum read_mode read_mode;
-      enum packet_mode packet_mode;
 
       flags = unpack32((unsigned char *)buf);
       switch (flags & 0x000f) {
@@ -764,7 +766,7 @@ ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
           len != 0)
         return -1;
 
-      size_t path_len = strlen(context->address.sun_path);
+      path_len = strlen(context->address.sun_path);
       if (rlen < 2 * 8 + path_len)
         *rbuf = driver_alloc(2 * 8 + path_len);
 
@@ -1254,7 +1256,6 @@ ssize_t cdrv_flush_packet(struct unix_context *context, ErlDrvTermData receiver,
 
   return sent_packets;
 }
-
 
 // }}}
 //----------------------------------------------------------------------------
