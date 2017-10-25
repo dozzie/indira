@@ -51,7 +51,8 @@ from unix command line. This works on three planes:
   <li>{@section Command line processing} covers parsing the arguments
       (<i>--option=value</i>) and carrying out the operation (starting the
       daemon, or telling it to stop or reload configuration) specified this
-      way</li>
+      way; reading data from <i>STDIN</i> with proper backpressure (e.g. from
+      another process through a shell pipeline) is also implemented</li>
   <li>{@section Starting Erlang applications} is about configuring and
       starting the application using Erlang's regular {@link application}
       interface, but with parameters coming from command line options and
@@ -93,7 +94,8 @@ Erlang VM exits as soon as `main()' returns in this setting.
 <i>-args_file Path</i> and <i>-noinput</i>. The first one is a means to
 configure Erlang VM (parameters to `erl(1)') without modifying the script
 itself, while the second one prevents Erlang from accidentally eating all the
-memory when input comes on <i>STDIN</i>.
+memory when input comes on <i>STDIN</i>. For reading <i>STDIN</i> with proper
+backpressure there is {@link indira_stdio} module.
 
 Since Erlang doesn't have a mechanism to detach from terminal <i>after</i> its
 VM started, `escript' shouldn't do it by itself (<i>-detached</i> option).
@@ -181,8 +183,8 @@ extending administrative commands set.
 == Further reading ==
 
 <ul>
-  <li>{@link indira}, {@link gen_indira_cli} -- functions for use in `escript'
-      scripts</li>
+  <li>{@link indira}, {@link gen_indira_cli}, {@link indira_stdio} --
+      functions for use in `escript' scripts</li>
   <li>{@link gen_indira_cli} -- behaviour to parse command line and carry out
       operations specified in it</li>
   <li>{@link gen_indira_command} -- behaviour to execute commands inside

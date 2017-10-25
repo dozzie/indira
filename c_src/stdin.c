@@ -1,9 +1,10 @@
 //----------------------------------------------------------------------------
 //
-// AF_UNIX sockets port driver, used by `indira_af_unix' module.
+// STDIN (or any file descriptor) reader port driver, used by `indira_stdin'
+// module.
 //
-// TODO: extract code from this file and from stdin.c to a common compilation
-// unit.
+// TODO: extract code from this file and from af_unix.c to a common
+// compilation unit.
 //
 //----------------------------------------------------------------------------
 // preamble
@@ -13,11 +14,8 @@
 
 #include <stdint.h>
 #include <sys/types.h>
-#include <sys/stat.h>
 #include <unistd.h>
 #include <sys/uio.h>
-#include <sys/socket.h>
-#include <sys/un.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <errno.h>
@@ -38,8 +36,8 @@
 //----------------------------------------------------------
 // definitions {{{
 
-#define PORT_DRIVER_NAME      "indira_af_unix_drv"
-#define PORT_DRIVER_NAME_SYM   indira_af_unix_drv
+#define PORT_DRIVER_NAME      "indira_stdin_drv"
+#define PORT_DRIVER_NAME_SYM   indira_stdin_drv
 
 #define PORT_DRIVER_NAME_LEN (sizeof(PORT_DRIVER_NAME) - 1)
 
@@ -62,20 +60,10 @@
 #define READ_RECV     1
 #define READ_ACTIVE   0
 
-#define PORT_COMMAND_INIT_LISTEN    0
-#define PORT_COMMAND_INIT_CONNECT   1
-#define PORT_COMMAND_ACCEPT         2
-#define PORT_COMMAND_ACCEPT_CANCEL  3
 #define PORT_COMMAND_RECV           4
 #define PORT_COMMAND_RECV_CANCEL    5
 #define PORT_COMMAND_SETOPTS        6
 #define PORT_COMMAND_GETOPTS        7
-#define PORT_COMMAND_CHMOD          8
-#define PORT_COMMAND_CHOWN_USER     9
-#define PORT_COMMAND_CHOWN_UID     10
-#define PORT_COMMAND_CHGRP_GROUP   11
-#define PORT_COMMAND_CHGRP_GID     12
-#define PORT_COMMAND_STAT          13
 
 // }}}
 //----------------------------------------------------------
@@ -96,7 +84,6 @@
 //----------------------------------------------------------------------------
 // Erlang port driver API
 
-enum socket_type { uninitialized, listen_socket, client_socket };
 enum packet_mode { raw, pfx1, pfx2, pfx4, line };
 enum read_mode { passive, active, once };
 enum data_mode { string, binary };
@@ -121,7 +108,6 @@ struct packet {
 };
 
 struct unix_context {
-  enum socket_type socket_type;
   // flags
   uint8_t reading;
   // how to read data (active/passive, packet format, return format)
@@ -131,18 +117,12 @@ struct unix_context {
   size_t max_packet_size;
   struct packet packet;
   // OS internals
-  int fdlisten;
-  int fdconn;
-  struct sockaddr_un address;
-  dev_t sock_device;
-  ino_t sock_inode;
+  int fd;
   // Erlang owner and reply-to addresses
   ErlDrvPort erl_port;
-  ErlDrvTermData write_reply_to;
   ErlDrvTermData read_reply_to;
 };
 
-static int cdrv_send_ok(ErlDrvPort port, ErlDrvTermData receiver);
 static int cdrv_send_data(ErlDrvPort port, ErlDrvTermData receiver, ErlDrvTermData *data, size_t len);
 static int cdrv_send_active(ErlDrvPort port, ErlDrvTermData reply_tag_atom, ErlDrvTermData *data, size_t len, size_t tuple_len);
 static int cdrv_send_error(ErlDrvPort port, ErlDrvTermData receiver, int error);
@@ -167,12 +147,9 @@ static void cdrv_send_binary(struct unix_context *context, ErlDrvTermData receiv
 //----------------------------------------------------------
 
 static void cdrv_close_fd(struct unix_context *context);
-static void cdrv_interrupt_write(struct unix_context *context, int error);
 static void cdrv_interrupt_read(struct unix_context *context, int error);
 static int  cdrv_set_reading(struct unix_context *context, ErlDrvTermData caller, int is_recv, size_t recv_size, int *error);
 static void cdrv_stop_reading(struct unix_context *context);
-static int  cdrv_set_accepting(struct unix_context *context, ErlDrvTermData caller, int *error);
-static void cdrv_stop_accepting(struct unix_context *context);
 
 // all of these are and smaller than PKT_ERR_NOT_READY
 #define PKT_ERR_NOT_READY       -1
@@ -193,20 +170,16 @@ static uint32_t packet_get(struct packet *ctx, char **resbuf, ErlDrvBinary **res
 static uint16_t unpack16(unsigned char *buf);
 static uint32_t unpack32(unsigned char *buf);
 static void store32(unsigned char *buf, uint32_t value);
-static void store64(unsigned char *buf, uint64_t value);
-
-static int find_uid(const char *name, size_t name_len, uid_t *uid);
-static int find_gid(const char *name, size_t name_len, gid_t *gid);
 
 // atoms
 static ErlDrvTermData atom_ok;
 static ErlDrvTermData atom_eof;
 static ErlDrvTermData atom_error;
 static ErlDrvTermData atom_closed;
-static ErlDrvTermData atom_unix_reply;
-static ErlDrvTermData atom_unix;
-static ErlDrvTermData atom_unix_error;
-static ErlDrvTermData atom_unix_closed;
+static ErlDrvTermData atom_stdin_reply;
+static ErlDrvTermData atom_stdin;
+static ErlDrvTermData atom_stdin_error;
+static ErlDrvTermData atom_stdin_closed;
 
 //----------------------------------------------------------
 // entry point definition {{{
@@ -216,10 +189,7 @@ static ErlDrvData   cdrv_start(ErlDrvPort port, char *cmd);
 static void         cdrv_stop(ErlDrvData drv_data);
 static ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command, char *buf, ErlDrvSizeT len, char **rbuf, ErlDrvSizeT rlen);
 static void         cdrv_ready_input(ErlDrvData drv_data, ErlDrvEvent event);
-static void         cdrv_ready_output(ErlDrvData drv_data, ErlDrvEvent event);
 static void         cdrv_stop_select(ErlDrvEvent event, void *reserved);
-static void         cdrv_outputv(ErlDrvData drv_data, ErlIOVec *ev);
-static void         cdrv_flush(ErlDrvData drv_data);
 
 ErlDrvEntry driver_entry = {
   cdrv_init,                    // int        init(void)
@@ -227,15 +197,15 @@ ErlDrvEntry driver_entry = {
   cdrv_stop,                    // void       stop(ErlDrvData drv_data)
   NULL,                         // void       output(ErlDrvData drv_data, char *buf, ErlDrvSizeT len) // port_command/2 handler
   cdrv_ready_input,             // void       ready_input(ErlDrvData, ErlDrvEvent)  // "ready for reading" event
-  cdrv_ready_output,            // void       ready_output(ErlDrvData, ErlDrvEvent) // "ready for writing" event
+  NULL,                         // void       ready_output(ErlDrvData, ErlDrvEvent) // "ready for writing" event
   PORT_DRIVER_NAME,             // <driver name>
   NULL,                         // void       finish(void)
   NULL,                         // <reserved>
   cdrv_control,                 // int        control(...) // port_control/3 handler
   NULL,                         // void       timeout(ErlDrvData drv_data)
-  cdrv_outputv,                 // void       outputv(ErlDrvData drv_data, ErlIOVec *ev) // port_command/2 handler, faster
+  NULL,                         // void       outputv(ErlDrvData drv_data, ErlIOVec *ev) // port_command/2 handler, faster
   NULL,                         // void       ready_async(ErlDrvData drv_data, ErlDrvThreadData thread_data)
-  cdrv_flush,                   // void       flush(ErlDrvData drv_data)
+  NULL,                         // void       flush(ErlDrvData drv_data)
   NULL,                         // int        call(...) // erlang:port_call/3 handler
   NULL,                         // void       event(ErlDrvData drv_data, ErlDrvEvent event, ErlDrvEventData event_data)
   ERL_DRV_EXTENDED_MARKER,
@@ -265,10 +235,10 @@ int cdrv_init(void)
   atom_eof    = driver_mk_atom("eof");
   atom_error  = driver_mk_atom("error");
   atom_closed = driver_mk_atom("closed");
-  atom_unix_reply  = driver_mk_atom("unix_reply");
-  atom_unix        = driver_mk_atom("unix");
-  atom_unix_error  = driver_mk_atom("unix_error");
-  atom_unix_closed = driver_mk_atom("unix_closed");
+  atom_stdin_reply  = driver_mk_atom("stdin_reply");
+  atom_stdin        = driver_mk_atom("stdin");
+  atom_stdin_error  = driver_mk_atom("stdin_error");
+  atom_stdin_closed = driver_mk_atom("stdin_closed");
 
   return 0;
 }
@@ -277,19 +247,48 @@ int cdrv_init(void)
 //----------------------------------------------------------
 // Erlang port start {{{
 
+static int prepare_fd(const char *cmd) // {{{
+{
+  errno = 0;
+
+  char *fd_string = strrchr(cmd, ' ');
+  if (fd_string == NULL || *(++fd_string) == 0)
+    return -1;
+
+  int fd;
+  for (fd = 0; *fd_string >= '0' && *fd_string <= '9'; ++fd_string)
+    fd = fd * 10 + *fd_string - '0';
+
+  if (*fd_string != 0)
+    return -1;
+
+  int fd_flags = fcntl(fd, F_GETFL);
+  if (fd_flags < 0)
+    return -1;
+
+  // check if we can read from this descriptor
+  if ((fd_flags & O_ACCMODE) != O_RDONLY && (fd_flags & O_ACCMODE) != O_RDWR) {
+    errno = EBADF;
+    return -1;
+  }
+
+  fcntl(fd, F_SETFL, O_NONBLOCK | fd_flags);
+
+  return fd;
+} // }}}
+
 static
 ErlDrvData cdrv_start(ErlDrvPort port, char *cmd)
 {
+  int fd = prepare_fd(cmd);
+  if (fd < 0)
+    return (errno != 0) ? ERL_DRV_ERROR_ERRNO : ERL_DRV_ERROR_BADARG;
+
   struct unix_context *context = driver_alloc(sizeof(struct unix_context));
 
-  context->socket_type = uninitialized;
   // operational data
   context->erl_port = port;
-  context->fdlisten = -1;
-  context->fdconn = -1;
-  memset(&context->address, 0, sizeof(context->address));
-  context->sock_device = 0;
-  context->sock_inode = 0;
+  context->fd = fd;
   // flags, options, and buffers for reading
   context->reading = 0;
   context->read_mode = passive;
@@ -313,11 +312,6 @@ void cdrv_stop(ErlDrvData drv_data)
 {
   struct unix_context *context = (struct unix_context *)drv_data;
 
-  if (context->socket_type == listen_socket && context->fdlisten >= 0)
-    // since we have a valid socket, `context->address' is a valid address and
-    // needs to be removed from filesystem
-    unlink(context->address.sun_path);
-
   //packet_free(&context->packet); // called by cdrv_close_fd()
   cdrv_close_fd(context);
 
@@ -339,68 +333,6 @@ void cdrv_stop_select(ErlDrvEvent event, void *reserved)
 //----------------------------------------------------------
 // Erlang port control {{{
 
-static int control_listen(struct sockaddr_un *addr, int backlog) // {{{
-{
-  int sock = socket(AF_UNIX, SOCK_STREAM, 0);
-  if (sock < 0)
-    return -1;
-
-  fcntl(sock, F_SETFL, O_NONBLOCK | fcntl(sock, F_GETFL));
-
-  if (bind(sock, (struct sockaddr *)addr, sizeof(*addr)) < 0) {
-    int save_errno = errno;
-    close(sock);
-    errno = save_errno;
-    return -1;
-  }
-
-  if (listen(sock, backlog) < 0) {
-    int save_errno = errno;
-    close(sock);
-    // FIXME: should I unlink here the socket?
-    unlink(addr->sun_path);
-    errno = save_errno;
-    return -1;
-  }
-
-  return sock;
-} // }}}
-
-static int control_connect(struct sockaddr_un *addr) // {{{
-{
-  int sock;
-
-  if ((sock = socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
-    return -1;
-
-  fcntl(sock, F_SETFL, O_NONBLOCK | fcntl(sock, F_GETFL));
-
-  if (connect(sock, (struct sockaddr *)addr, sizeof(*addr)) == 0)
-    // success
-    return sock;
-
-  if (errno != EPROTOTYPE) {
-    int save_errno = errno;
-    close(sock);
-    errno = save_errno;
-    return -1;
-  }
-
-  // try again with datagram socket
-  close(sock);
-  if ((sock = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0)
-    return -1;
-
-  if (connect(sock, (struct sockaddr *)addr, sizeof(*addr)) < 0) {
-    int save_errno = errno;
-    close(sock);
-    errno = save_errno;
-    return -1;
-  }
-
-  return sock;
-} // }}}
-
 static
 ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
                           char *buf, ErlDrvSizeT len,
@@ -410,141 +342,23 @@ ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
 
   uint32_t flags;
   ErlDrvTermData caller;
-  uid_t uid;
-  gid_t gid;
-  struct stat sock_info;
   int error;
-  uint32_t read_size;
-  size_t path_len;
-
-  enum data_mode data_mode;
-  enum read_mode read_mode;
-  enum packet_mode packet_mode;
 
   switch (command) {
-    case PORT_COMMAND_INIT_LISTEN: // {{{
-      if (context->socket_type != uninitialized || len == 0)
-        return -1;
-
-      context->socket_type = listen_socket;
-
-      if (len >= sizeof(context->address.sun_path)) {
-        // assume (*rbuf) is larger than ~20 bytes
-        strcpy(*rbuf, erl_errno_id(ENAMETOOLONG));
-        return strlen(*rbuf);
-      }
-
-      context->address.sun_family = AF_UNIX;
-      memcpy(context->address.sun_path, buf, len);
-      context->address.sun_path[len] = 0;
-
-      if ((context->fdlisten = control_listen(&context->address, 16)) < 0) {
-        // assume (*rbuf) is larger than ~20 bytes
-        strcpy(*rbuf, erl_errno_id(errno));
-        return strlen(*rbuf);
-      }
-
-      // XXX: I know this is a race condition, but really, what can I do?
-      // fstat() returns info from an abstract space, and I need info from
-      // actual filesystem
-      if (stat(context->address.sun_path, &sock_info) < 0) {
-        // assume (*rbuf) is larger than ~20 bytes
-        strcpy(*rbuf, erl_errno_id(errno));
-        return strlen(*rbuf);
-      }
-      if ((sock_info.st_mode & S_IFSOCK) != S_IFSOCK) {
-        // we lost the race to the socket file
-        strcpy(*rbuf, erl_errno_id(ESTALE));
-        return strlen(*rbuf);
-      }
-      context->sock_device = sock_info.st_dev;
-      context->sock_inode = sock_info.st_ino;
-
-      return 0;
-    break; // }}}
-
-    case PORT_COMMAND_INIT_CONNECT: // {{{
-      if (context->socket_type != uninitialized || len == 0)
-        return -1;
-
-      context->socket_type = client_socket;
-
-      if (len >= sizeof(context->address.sun_path)) {
-        // assume (*rbuf) is larger than ~20 bytes
-        strcpy(*rbuf, erl_errno_id(ENAMETOOLONG));
-        return strlen(*rbuf);
-      }
-
-      context->address.sun_family = AF_UNIX;
-      memcpy(context->address.sun_path, buf, len);
-      context->address.sun_path[len] = 0;
-
-      if ((context->fdconn = control_connect(&context->address)) < 0) {
-        // assume (*rbuf) is larger than ~20 bytes
-        strcpy(*rbuf, erl_errno_id(errno));
-        return strlen(*rbuf);
-      }
-
-      if (stat(context->address.sun_path, &sock_info) < 0) {
-        // assume (*rbuf) is larger than ~20 bytes
-        strcpy(*rbuf, erl_errno_id(errno));
-        return strlen(*rbuf);
-      }
-      if ((sock_info.st_mode & S_IFSOCK) != S_IFSOCK) {
-        // we lost the race to the socket file
-        strcpy(*rbuf, erl_errno_id(ESTALE));
-        return strlen(*rbuf);
-      }
-      context->sock_device = sock_info.st_dev;
-      context->sock_inode = sock_info.st_ino;
-
-      return 0;
-    break; // }}}
-
-    case PORT_COMMAND_ACCEPT: // {{{
-      if (context->socket_type != listen_socket || len != 0)
-        return -1;
-
-      caller = driver_caller(context->erl_port);
-
-      if (cdrv_set_accepting(context, caller, &error) != 0)
-        cdrv_send_error(context->erl_port, caller, error);
-      // on success, `cdrv_ready_input()' sends a reply
-
-      return 0;
-    break; // }}}
-
-    case PORT_COMMAND_ACCEPT_CANCEL: // {{{
-      if (context->socket_type != listen_socket || len != 0 ||
-          driver_caller(context->erl_port) != context->read_reply_to)
-        return -1;
-
-      // dangling accept() cancel is not allowed
-      if (context->reading &&
-          driver_caller(context->erl_port) != context->read_reply_to)
-        return -1;
-
-      // since it's called from the same process that started the accept()
-      // call, we don't need to send any "call interrupted" messages
-      cdrv_stop_accepting(context);
-
-      return 0;
-    break; // }}}
-
     case PORT_COMMAND_RECV: // {{{
-      if (context->socket_type != client_socket || len != 4)
+      if (len != 4)
         return -1;
 
       caller = driver_caller(context->erl_port);
 
-      read_size = unpack32((unsigned char *)buf);
+      uint32_t read_size = unpack32((unsigned char *)buf);
       if (read_size != 0 && context->packet_mode != raw) {
         // reading a specific number of bytes only allowed for raw packet mode
         cdrv_send_error(context->erl_port, caller, EINVAL);
         return 0;
       }
 
-      if (context->fdconn < 0) {
+      if (context->fd < 0) {
         cdrv_send_error(context->erl_port, caller, ERROR_CLOSED);
         return 0;
       }
@@ -557,10 +371,10 @@ ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
     break; // }}}
 
     case PORT_COMMAND_RECV_CANCEL: // {{{
-      if (context->socket_type != client_socket || len != 0)
+      if (len != 0)
         return -1;
 
-      if (context->fdconn == -1)
+      if (context->fd == -1)
         // possibly a race between read() error and read timeout; don't crash
         // the caller
         return 0;
@@ -579,8 +393,12 @@ ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
     break; // }}}
 
     case PORT_COMMAND_SETOPTS: // {{{
-      if (context->socket_type == uninitialized || len != 8)
+      if (len != 8)
         return -1;
+
+      enum data_mode data_mode;
+      enum read_mode read_mode;
+      enum packet_mode packet_mode;
 
       flags = unpack32((unsigned char *)buf);
       switch (flags & 0x000f) {
@@ -606,17 +424,15 @@ ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
         default: return -1;
       }
 
-      if (context->socket_type == client_socket) {
-        if (read_mode != passive && context->read_mode == passive) {
-          // change from passive to active mode
-          cdrv_interrupt_read(context, EINTR);
-          // NOTE: no need to stop reading, since the new mode is one of the
-          // active ones and it will be enabled back soon enough
-          //cdrv_stop_reading(context);
-        } else if (read_mode == passive && context->read_mode != passive) {
-          // change from active to passive mode
-          cdrv_stop_reading(context);
-        }
+      if (read_mode != passive && context->read_mode == passive) {
+        // change from passive to active mode
+        cdrv_interrupt_read(context, EINTR);
+        // NOTE: no need to stop reading, since the new mode is one of the
+        // active ones and it will be enabled back soon enough
+        //cdrv_stop_reading(context);
+      } else if (read_mode == passive && context->read_mode != passive) {
+        // change from active to passive mode
+        cdrv_stop_reading(context);
       }
 
       context->data_mode = data_mode;
@@ -627,20 +443,19 @@ ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
       if (context->max_packet_size > MAX_PACKET_SIZE)
         context->max_packet_size = MAX_PACKET_SIZE;
 
-      if (context->socket_type == client_socket &&
-          context->read_mode != passive) {
+      if (context->read_mode != passive) {
         // one of the active modes
         int error;
         int result = cdrv_set_reading(context, ERL_PID_DOESNT_MATTER,
                                       READ_ACTIVE, 0, &error);
-        // ERROR_CLOSED (fdconn closed) can/should be ignored, but other
-        // errors are important
+        // ERROR_CLOSED (fd closed) can/should be ignored, but other errors
+        // are important
         if (result < 0 && error != ERROR_CLOSED) {
           ErlDrvTermData reply[] = {
             ERL_DRV_ATOM, driver_mk_atom(erl_errno_id(error))
           };
 
-          cdrv_send_active(context->erl_port, atom_unix_error, reply,
+          cdrv_send_active(context->erl_port, atom_stdin_error, reply,
                            sizeof(reply) / sizeof(reply[0]), 1);
         }
       }
@@ -649,7 +464,7 @@ ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
     break; // }}}
 
     case PORT_COMMAND_GETOPTS: // {{{
-      if (context->socket_type == uninitialized || len != 0)
+      if (len != 0)
         return -1;
 
       flags = 0;
@@ -679,110 +494,6 @@ ErlDrvSSizeT cdrv_control(ErlDrvData drv_data, unsigned int command,
 
       return 8;
     break; // }}}
-
-    case PORT_COMMAND_CHMOD: // {{{
-      if (context->socket_type != listen_socket || context->fdlisten < 0 ||
-          len != 2)
-        return -1;
-
-      if (chmod(context->address.sun_path, unpack16((unsigned char *)buf)) < 0) {
-        // assume (*rbuf) is larger than ~20 bytes
-        strcpy(*rbuf, erl_errno_id(errno));
-        return strlen(*rbuf);
-      }
-
-      return 0;
-    break; // }}}
-
-    case PORT_COMMAND_CHOWN_UID: // {{{
-      if (context->socket_type != listen_socket || context->fdlisten < 0 ||
-          len != 4)
-        return -1;
-
-      uid = unpack32((unsigned char *)buf);
-
-      if (chown(context->address.sun_path, uid, -1) < 0) {
-        // assume (*rbuf) is larger than ~20 bytes
-        strcpy(*rbuf, erl_errno_id(errno));
-        return strlen(*rbuf);
-      }
-
-      return 0;
-    break; // }}}
-
-    case PORT_COMMAND_CHOWN_USER: // {{{
-      if (context->socket_type != listen_socket || context->fdlisten < 0 ||
-          len == 0)
-        return -1;
-
-      if (find_uid(buf, len, &uid) < 0) {
-        // assume (*rbuf) is larger than ~20 bytes
-        strcpy(*rbuf, "nxuser");
-        return strlen(*rbuf);
-      }
-
-      if (chown(context->address.sun_path, uid, -1) < 0) {
-        // assume (*rbuf) is larger than ~20 bytes
-        strcpy(*rbuf, erl_errno_id(errno));
-        return strlen(*rbuf);
-      }
-
-      return 0;
-    break; // }}}
-
-    case PORT_COMMAND_CHGRP_GID: // {{{
-      if (context->socket_type != listen_socket || context->fdlisten < 0 ||
-          len != 4)
-        return -1;
-
-      gid = unpack32((unsigned char *)buf);
-
-      if (chown(context->address.sun_path, -1, gid) < 0) {
-        // assume (*rbuf) is larger than ~20 bytes
-        strcpy(*rbuf, erl_errno_id(errno));
-        return strlen(*rbuf);
-      }
-
-      return 0;
-    break; // }}}
-
-    case PORT_COMMAND_CHGRP_GROUP: // {{{
-      if (context->socket_type != listen_socket || context->fdlisten < 0 ||
-          len == 0)
-        return -1;
-
-      if (find_gid(buf, len, &gid) < 0) {
-        // assume (*rbuf) is larger than ~20 bytes
-        strcpy(*rbuf, "nxgroup");
-        return strlen(*rbuf);
-      }
-
-      if (chown(context->address.sun_path, -1, gid) < 0) {
-        // assume (*rbuf) is larger than ~20 bytes
-        strcpy(*rbuf, erl_errno_id(errno));
-        return strlen(*rbuf);
-      }
-
-      return 0;
-    break; // }}}
-
-    case PORT_COMMAND_STAT: // {{{
-      if (context->socket_type == uninitialized ||
-          (context->socket_type == listen_socket && context->fdlisten < 0) ||
-          (context->socket_type == client_socket && context->fdconn < 0) ||
-          len != 0)
-        return -1;
-
-      path_len = strlen(context->address.sun_path);
-      if (rlen < 2 * 8 + path_len)
-        *rbuf = driver_alloc(2 * 8 + path_len);
-
-      store64((unsigned char *)(*rbuf), context->sock_device);
-      store64((unsigned char *)(*rbuf + 8), context->sock_inode);
-      memcpy(*rbuf + 2 * 8, context->address.sun_path, path_len);
-
-      return 2 * 8 + path_len;
-    break; // }}}
   }
 
   return -1;
@@ -796,59 +507,7 @@ static
 void cdrv_ready_input(ErlDrvData drv_data, ErlDrvEvent event)
 {
   struct unix_context *context = (struct unix_context *)drv_data;
-  // `event' is fdconn or fdlisten descriptor
-
-  if (context->socket_type == listen_socket) {
-    int fd = accept((long int)event, NULL, NULL);
-
-    // not a fatal error, try again
-    if (fd < 0 && errno == ECONNABORTED)
-      return;
-
-    cdrv_stop_accepting(context);
-
-    if (fd < 0) {
-      // fatal error
-      cdrv_close_fd(context);
-      cdrv_send_error(context->erl_port, context->read_reply_to, errno);
-      return;
-    }
-
-    // (fd >= 0)
-
-    fcntl(fd, F_SETFL, O_NONBLOCK | fcntl(fd, F_GETFL));
-
-    struct unix_context *client = driver_alloc(sizeof(struct unix_context));
-
-    memcpy(client, context, sizeof(*context));
-    client->socket_type = client_socket;
-    client->fdlisten = -1;
-    client->fdconn = fd;
-    client->reading = 0;
-    //client->erl_port = port; // will be set after port is created
-    packet_init(&client->packet);
-
-    ErlDrvPort port =
-      (ErlDrvPort)driver_create_port(context->erl_port, context->read_reply_to,
-                                     PORT_DRIVER_NAME, (ErlDrvData)client);
-    // port_control() should return binaries
-    set_port_control_flags(port, PORT_CONTROL_FLAG_BINARY);
-    client->erl_port = port;
-    if (client->read_mode != passive)
-      cdrv_set_reading(client, ERL_PID_DOESNT_MATTER, READ_ACTIVE, 0, NULL);
-
-    ErlDrvTermData reply[] = {
-      ERL_DRV_ATOM, atom_ok,
-      ERL_DRV_PORT, driver_mk_port(port),
-      ERL_DRV_TUPLE, 2
-    };
-    cdrv_send_data(context->erl_port, context->read_reply_to,
-                   reply, sizeof(reply) / sizeof(reply[0]));
-
-    return;
-  }
-
-  // XXX: context->socket_type == client_socket
+  // `event' is context->fd descriptor
 
   if (context->packet_mode == raw && packet_boundary(&context->packet)) {
     // reading arbitrary sized chunks of raw data;
@@ -934,128 +593,6 @@ void cdrv_ready_input(ErlDrvData drv_data, ErlDrvEvent event)
 
 // }}}
 //----------------------------------------------------------
-// Erlang output ready on select descriptor {{{
-
-static
-void cdrv_ready_output(ErlDrvData drv_data, ErlDrvEvent event)
-{
-  struct unix_context *context = (struct unix_context *)drv_data;
-  // `event' is fdconn descriptor
-
-  ErlDrvSizeT queued_bytes = driver_sizeq(context->erl_port);
-  if (queued_bytes == 0) {
-    driver_select(context->erl_port, event, ERL_DRV_WRITE, 0);
-    set_busy_port(context->erl_port, 0);
-    return;
-  }
-
-  int iov_len;
-  SysIOVec *iov = driver_peekq(context->erl_port, &iov_len);
-
-  ssize_t result = writev((long int)event, (struct iovec *)iov, iov_len);
-  if (result > 0)
-    queued_bytes = driver_deq(context->erl_port, result);
-
-  if (queued_bytes == 0) {
-    cdrv_send_ok(context->erl_port, context->write_reply_to);
-
-    driver_select(context->erl_port, event, ERL_DRV_WRITE, 0);
-    set_busy_port(context->erl_port, 0);
-  } else if (result >= 0 || errno == EWOULDBLOCK || errno == EAGAIN) {
-    // partial write() (possibly the written part is zero); stay busy and
-    // selected (i.e., do nothing)
-  } else {
-    // write error
-    cdrv_send_error(context->erl_port, context->write_reply_to, errno);
-    cdrv_interrupt_read(context, ERROR_CLOSED);
-    cdrv_close_fd(context);
-    set_busy_port(context->erl_port, 0);
-  }
-}
-
-// }}}
-//----------------------------------------------------------
-// Erlang output {{{
-
-static
-void cdrv_outputv(ErlDrvData drv_data, ErlIOVec *ev)
-{
-  struct unix_context *context = (struct unix_context *)drv_data;
-
-  ErlDrvTermData caller = driver_caller(context->erl_port);
-
-  if (context->socket_type != client_socket) {
-    cdrv_send_error(context->erl_port, caller, EINVAL);
-    return;
-  }
-
-  if (context->fdconn < 0) {
-    cdrv_send_error(context->erl_port, caller, ERROR_CLOSED);
-    return;
-  }
-
-  SysIOVec *iov = ev->iov;
-  int iov_len = ev->vsize;
-  uint32_t packet_size = ev->size;
-  switch (context->packet_mode) {
-    case pfx1: case pfx2: case pfx4:
-      // add data prefix
-      // TODO: make space for packet prefix when iov[0].iov_len != 0 or
-      // iov[0].iov_base != NULL
-      iov[0].iov_len = context->packet_mode == pfx4 ? 4 :
-                       context->packet_mode == pfx2 ? 2 : 1;
-      iov[0].iov_base = (void *)&packet_size;
-    break;
-    default:
-      // add nothing
-    break;
-  }
-
-  ssize_t result = writev(context->fdconn, (struct iovec *)iov, iov_len);
-
-  if (result == ev->size) {
-    cdrv_send_ok(context->erl_port, caller);
-  } else if ((result >= 0 && result < ev->size) ||
-             (result <  0 && (errno == EWOULDBLOCK || errno == EAGAIN))) {
-    // partial write() (possibly the written part is zero)
-
-    // NOTE: sending ACK/NAK is delayed until the queue is flushed
-    context->write_reply_to = caller;
-
-    // TODO: build ErlIOVec when iov != ev->iov
-    driver_enqv(context->erl_port, ev, (result > 0) ? result : 0);
-
-    ErlDrvEvent event = (ErlDrvEvent)((long int)context->fdconn);
-    driver_select(context->erl_port, event, ERL_DRV_WRITE, 1);
-    set_busy_port(context->erl_port, 1);
-  } else {
-    // write error
-    cdrv_send_error(context->erl_port, caller, errno);
-    cdrv_interrupt_read(context, ERROR_CLOSED);
-    cdrv_close_fd(context);
-  }
-}
-
-// }}}
-//----------------------------------------------------------
-// flush write queue {{{
-
-static
-void cdrv_flush(ErlDrvData drv_data)
-{
-  struct unix_context *context = (struct unix_context *)drv_data;
-
-  ErlDrvSizeT queued_bytes = driver_sizeq(context->erl_port);
-  if (queued_bytes == 0)
-    // well, this callback wouldn't be called if queued_bytes == 0
-    return;
-
-  cdrv_interrupt_write(context, ERROR_CLOSED);
-  driver_deq(context->erl_port, queued_bytes);
-}
-
-// }}}
-//----------------------------------------------------------
 
 //----------------------------------------------------------------------------
 // port state and descriptor helpers {{{
@@ -1064,13 +601,7 @@ static
 int cdrv_set_reading(struct unix_context *context, ErlDrvTermData caller,
                      int is_recv, size_t recv_size, int *error)
 {
-  if (context->socket_type != client_socket) {
-    if (error != NULL)
-      *error = EINVAL;
-    return -1;
-  }
-
-  if (context->fdconn < 0) {
+  if (context->fd < 0) {
     if (error != NULL)
       *error = ERROR_CLOSED;
     return -1;
@@ -1107,7 +638,6 @@ int cdrv_set_reading(struct unix_context *context, ErlDrvTermData caller,
       // fatal error (out of memory, packet too big, the like)
       if (error != NULL)
         *error = packet_errno(sent);
-      cdrv_interrupt_write(context, ERROR_CLOSED);
       cdrv_close_fd(context);
       return -1;
     }
@@ -1126,7 +656,7 @@ int cdrv_set_reading(struct unix_context *context, ErlDrvTermData caller,
     context->read_reply_to = caller;
   }
 
-  ErlDrvEvent event = (ErlDrvEvent)((long int)context->fdconn);
+  ErlDrvEvent event = (ErlDrvEvent)((long int)context->fd);
   driver_select(context->erl_port, event, ERL_DRV_READ, 1);
 
   return 0;
@@ -1136,7 +666,7 @@ static
 void cdrv_stop_reading(struct unix_context *context)
 {
   context->reading = 0;
-  ErlDrvEvent event = (ErlDrvEvent)((long int)context->fdconn);
+  ErlDrvEvent event = (ErlDrvEvent)((long int)context->fd);
   driver_select(context->erl_port, event, ERL_DRV_READ, 0);
 }
 
@@ -1152,46 +682,6 @@ void cdrv_interrupt_read(struct unix_context *context, int error)
 }
 
 static
-int cdrv_set_accepting(struct unix_context *context, ErlDrvTermData caller,
-                       int *error)
-{
-  if (context->socket_type != listen_socket) {
-    if (error != NULL)
-      *error = EINVAL;
-    return -1;
-  }
-
-  if (context->reading) {
-    if (error != NULL)
-      *error = EALREADY;
-    return -1;
-  }
-
-  context->reading = 1;
-  context->read_reply_to = caller;
-
-  ErlDrvEvent event = (ErlDrvEvent)((long int)context->fdlisten);
-  driver_select(context->erl_port, event, ERL_DRV_READ, 1);
-
-  return 0;
-}
-
-static
-void cdrv_stop_accepting(struct unix_context *context)
-{
-  context->reading = 0;
-  ErlDrvEvent event = (ErlDrvEvent)((long int)context->fdlisten);
-  driver_select(context->erl_port, event, ERL_DRV_READ, 0);
-}
-
-static
-void cdrv_interrupt_write(struct unix_context *context, int error)
-{
-  if (driver_sizeq(context->erl_port) > 0)
-    cdrv_send_error(context->erl_port, context->write_reply_to, error);
-}
-
-static
 void cdrv_close_fd(struct unix_context *context)
 {
   ErlDrvSizeT queued_bytes;
@@ -1202,18 +692,15 @@ void cdrv_close_fd(struct unix_context *context)
 
   packet_free(&context->packet);
 
-  if (context->fdlisten >= 0) {
-    ErlDrvEvent event = (ErlDrvEvent)((long int)context->fdlisten);
-    driver_select(context->erl_port, event,
-                  ERL_DRV_USE | ERL_DRV_READ | ERL_DRV_WRITE, 0);
-    context->fdlisten = -1;
-  }
-
-  if (context->fdconn >= 0) {
-    ErlDrvEvent event = (ErlDrvEvent)((long int)context->fdconn);
-    driver_select(context->erl_port, event,
-                  ERL_DRV_USE | ERL_DRV_READ | ERL_DRV_WRITE, 0);
-    context->fdconn = -1;
+  if (context->fd >= 0 && context->fd <= 2) {
+    // don't ever close STDIO, as Erlang may not expect it
+    ErlDrvEvent event = (ErlDrvEvent)((long int)context->fd);
+    driver_select(context->erl_port, event, ERL_DRV_READ, 0);
+    context->fd = -1;
+  } else if (context->fd > 0) {
+    ErlDrvEvent event = (ErlDrvEvent)((long int)context->fd);
+    driver_select(context->erl_port, event, ERL_DRV_USE | ERL_DRV_READ, 0);
+    context->fd = -1;
   }
 }
 
@@ -1254,7 +741,7 @@ ssize_t cdrv_flush_packet(struct unix_context *context, ErlDrvTermData receiver,
           (ErlDrvTermData)data, (ErlDrvTermData)size
       };
 
-      cdrv_send_active(context->erl_port, atom_unix, reply,
+      cdrv_send_active(context->erl_port, atom_stdin, reply,
                        sizeof(reply) / sizeof(reply[0]), 1);
     }
 
@@ -1288,26 +775,13 @@ int cdrv_send_data(ErlDrvPort port, ErlDrvTermData receiver,
                    ErlDrvTermData *data, size_t len)
 {
   ErlDrvTermData reply[6 + 10] = {
-    ERL_DRV_ATOM, atom_unix_reply,
+    ERL_DRV_ATOM, atom_stdin_reply,
     ERL_DRV_PORT, driver_mk_port(port)
   };
   memcpy(reply + 4, data, sizeof(ErlDrvTermData) * len);
   reply[4 + len] = ERL_DRV_TUPLE;
   reply[5 + len] = 3;
   return DRIVER_SEND_TERM(port, receiver, reply, 6 + len);
-}
-
-static
-int cdrv_send_ok(ErlDrvPort port, ErlDrvTermData receiver)
-{
-  ErlDrvTermData reply[] = {
-    ERL_DRV_ATOM, atom_unix_reply,
-    ERL_DRV_PORT, driver_mk_port(port),
-    ERL_DRV_ATOM, atom_ok,
-    ERL_DRV_TUPLE, 3
-  };
-  return DRIVER_SEND_TERM(port, receiver,
-                          reply, sizeof(reply) / sizeof(reply[0]));
 }
 
 static
@@ -1320,7 +794,7 @@ int cdrv_send_error(ErlDrvPort port, ErlDrvTermData receiver, int error)
     error_atom = driver_mk_atom(erl_errno_id(error));
 
   ErlDrvTermData reply[] = {
-    ERL_DRV_ATOM, atom_unix_reply,
+    ERL_DRV_ATOM, atom_stdin_reply,
     ERL_DRV_PORT, driver_mk_port(port),
       ERL_DRV_ATOM, atom_error,
       ERL_DRV_ATOM, error_atom,
@@ -1370,12 +844,10 @@ static void cdrv_send_input(struct unix_context *context,
       cdrv_send_data(context->erl_port, receiver,
                      reply, sizeof(reply) / sizeof(reply[0]));
       cdrv_stop_reading(context);
-      cdrv_interrupt_write(context, ERROR_CLOSED);
       cdrv_close_fd(context);
     } else { // {error, Reason :: atom()}
       cdrv_send_error(context->erl_port, receiver, error);
       cdrv_stop_reading(context);
-      cdrv_interrupt_write(context, ERROR_CLOSED);
       cdrv_close_fd(context);
     }
   } else { // context->read_mode == active | once
@@ -1385,7 +857,7 @@ static void cdrv_send_input(struct unix_context *context,
           (ErlDrvTermData)(data), (ErlDrvTermData)len
       };
 
-      cdrv_send_active(context->erl_port, atom_unix, reply,
+      cdrv_send_active(context->erl_port, atom_stdin, reply,
                        sizeof(reply) / sizeof(reply[0]), 1);
 
       if (context->read_mode == once) {
@@ -1393,9 +865,8 @@ static void cdrv_send_input(struct unix_context *context,
         context->read_mode = passive;
       }
     } else if (len == 0) { // {unix_closed, Port}
-      cdrv_send_active(context->erl_port, atom_unix_closed, NULL, 0, 0);
+      cdrv_send_active(context->erl_port, atom_stdin_closed, NULL, 0, 0);
       cdrv_stop_reading(context);
-      cdrv_interrupt_write(context, ERROR_CLOSED);
       cdrv_close_fd(context);
     } else { // {unix_error, Port, Reason :: atom()}
       ErlDrvTermData error_atom;
@@ -1408,11 +879,10 @@ static void cdrv_send_input(struct unix_context *context,
         ERL_DRV_ATOM, error_atom
       };
 
-      cdrv_send_active(context->erl_port, atom_unix_error, reply,
+      cdrv_send_active(context->erl_port, atom_stdin_error, reply,
                        sizeof(reply) / sizeof(reply[0]), 1);
       // we're here because of read() error; those are always fatal
       cdrv_stop_reading(context);
-      cdrv_interrupt_write(context, ERROR_CLOSED);
       cdrv_close_fd(context);
     }
   }
@@ -1437,7 +907,7 @@ static void cdrv_send_empty_input(struct unix_context *context,
         (ErlDrvTermData)"", (ErlDrvTermData)0
     };
 
-    cdrv_send_active(context->erl_port, atom_unix, reply,
+    cdrv_send_active(context->erl_port, atom_stdin, reply,
                      sizeof(reply) / sizeof(reply[0]), 1);
 
     if (context->read_mode == once) {
@@ -1465,7 +935,7 @@ static void cdrv_send_binary(struct unix_context *context,
       ERL_DRV_BINARY, (ErlDrvTermData)data, data->orig_size, 0
     };
 
-    cdrv_send_active(context->erl_port, atom_unix, reply,
+    cdrv_send_active(context->erl_port, atom_stdin, reply,
                      sizeof(reply) / sizeof(reply[0]), 1);
 
     if (context->read_mode == once) {
@@ -1502,79 +972,6 @@ void store32(unsigned char *buf, uint32_t value)
   buf[1] = 0xff & (value >> (8 * 2));
   buf[2] = 0xff & (value >> (8 * 1));
   buf[3] = 0xff & (value >> (8 * 0));
-}
-
-static
-void store64(unsigned char *buf, uint64_t value)
-{
-  buf[0] = 0xff & (value >> (8 * 7));
-  buf[1] = 0xff & (value >> (8 * 6));
-  buf[2] = 0xff & (value >> (8 * 5));
-  buf[3] = 0xff & (value >> (8 * 4));
-  buf[4] = 0xff & (value >> (8 * 3));
-  buf[5] = 0xff & (value >> (8 * 2));
-  buf[6] = 0xff & (value >> (8 * 1));
-  buf[7] = 0xff & (value >> (8 * 0));
-}
-
-// }}}
-//----------------------------------------------------------------------------
-// lookup UID/GID {{{
-
-static
-int find_uid(const char *name, size_t name_len, uid_t *uid)
-{
-  char user_name[4096];
-  if (name_len > sizeof(user_name) - 1) {
-    errno = ENAMETOOLONG;
-    return -1;
-  }
-  memcpy(user_name, name, name_len);
-  user_name[name_len] = 0;
-
-  long buffer_size = sysconf(_SC_GETPW_R_SIZE_MAX);
-  if (buffer_size < 0)
-    buffer_size = 4096;
-  char buffer[buffer_size];
-
-  struct passwd entry;
-  struct passwd *result = NULL;
-  errno = 0;
-  if (getpwnam_r(user_name, &entry, buffer, buffer_size, &result) == 0 &&
-      result != NULL) {
-    *uid = entry.pw_uid;
-    return 0;
-  } else {
-    return -1;
-  }
-}
-
-static
-int find_gid(const char *name, size_t name_len, gid_t *gid)
-{
-  char group_name[4096];
-  if (name_len > sizeof(group_name) - 1) {
-    errno = ENAMETOOLONG;
-    return -1;
-  }
-  memcpy(group_name, name, name_len);
-  group_name[name_len] = 0;
-
-  long buffer_size = sysconf(_SC_GETGR_R_SIZE_MAX);
-  if (buffer_size < 0)
-    buffer_size = 4096;
-  char buffer[buffer_size];
-
-  struct group entry;
-  struct group *result = NULL;
-  errno = 0;
-  if (getgrnam_r(group_name, &entry, buffer, buffer_size, &result) == 0 &&
-      result != NULL) {
-    *gid = entry.gr_gid;
-    return 0;
-  } else {
-    return -1;
-  }
 }
 
 // }}}

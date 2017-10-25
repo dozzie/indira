@@ -26,6 +26,7 @@ link_verbose = $(link_verbose_$(V))
 
 OUTDIR ?= ../priv
 TARGETS = $(OUTDIR)/indira_af_unix_drv.so \
+          $(OUTDIR)/indira_stdin_drv.so \
           $(OUTDIR)/indira_unix_unlinker
 
 .PHONY: all clean
@@ -38,13 +39,17 @@ clean:
 #-----------------------------------------------------------------------------
 # main compilation
 
-SOURCES = af_unix.c unlinker.c
+SOURCES = af_unix.c stdin.c unlinker.c
 HEADERS =
 
 AF_UNIX_OBJS = af_unix.o
+STDIN_OBJS = stdin.o
 UNLINKER_OBJS = unlinker.o
 
 $(OUTDIR)/indira_af_unix_drv.so: $(AF_UNIX_OBJS)
+	$(link_verbose) $(CC) -fPIC -shared $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+$(OUTDIR)/indira_stdin_drv.so: $(STDIN_OBJS)
 	$(link_verbose) $(CC) -fPIC -shared $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 $(OUTDIR)/indira_unix_unlinker: $(UNLINKER_OBJS)
