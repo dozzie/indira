@@ -10,7 +10,8 @@
     indira_unix_conn_sup,
     indira_chdir,
     indira_dist_erl,
-    indira_pidfile
+    indira_pidfile,
+    indira_af_unix_manager
   ]},
   {applications, [kernel, stdlib]},
   {modules, []},
