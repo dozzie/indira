@@ -1,6 +1,6 @@
 {application, indira, [
   {description, "daemonization helper tools"},
-  {vsn, "0.9.0"},
+  {vsn, "1.0.0"},
   {registered, [
     indira_sup,
     indira_boot_sup,
@@ -10,12 +10,15 @@
     indira_unix_conn_sup,
     indira_chdir,
     indira_dist_erl,
-    indira_pidfile
+    indira_pidfile,
+    indira_af_unix_manager
   ]},
   {applications, [kernel, stdlib]},
+  {modules, []},
   {mod, {indira_application, []}},
   {env, [
     %{command, Callback :: fun() | {fun(), term()} | {module(), term()}},
+    %{reload_function, {Mod :: atom(), Fun :: atom(), Args :: [term()]}},
     %{pidfile, Path :: file:filename()},
     %{workdir, Path :: file:filename()},
     %{net, {Node :: atom(), NameType :: shortnames | longnames,

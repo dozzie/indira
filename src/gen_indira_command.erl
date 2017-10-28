@@ -88,8 +88,7 @@
 %%%     <li><i>reload</i>, reload configuration stored in a file</li>
 %%%     <li><i>netconfig</i>, setup distributed Erlang (epmd, cookie and
 %%%         <i>-(s)name</i>), so an administrator can get shell and debug
-%%%         daemon's internals (see {@link
-%%%         indira_app:distributed_start/0})</li>
+%%%         daemon's internals (see {@link indira:distributed_start/0})</li>
 %%%     <li><i>increase/decrease logging level</i>, for administrator to
 %%%         diagnose operations without resorting to tracing Erlang</li>
 %%%   </ul>

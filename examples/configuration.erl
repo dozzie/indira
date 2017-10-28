@@ -9,8 +9,8 @@
 %%%       <i>listen</i> ({@type [@{Module :: module(), Args :: term()@}]}) --
 %%%       a list of administrative sockets addresses, where `Module'
 %%%       implements {@link gen_indira_socket} and `Args' describes socket's
-%%%       address; see {@link indira_unix}, {@link indira_tcp}, and {@link
-%%%       indira_udp}
+%%%       address; see {@link indira_unix}, {@link indira_tcp}, and
+%%%       {@link indira_udp}
 %%%     </li>
 %%%     <li>
 %%%       <i>command</i> ({@type @{Module :: module(), Args :: term()@} |
@@ -19,6 +19,11 @@
 %%%       is its additional configuration, if one is necessary; it can also be
 %%%       a one-argument function or a pair of a two-argument function and
 %%%       a term (`{fun(), Arg}'), but this is not recommended
+%%%     </li>
+%%%     <li>
+%%%       <i>reload_function</i> ({@type @{Mod :: atom(), Fun :: atom(),
+%%%       Args :: [term()]@}}) -- function to be called by
+%%%       {@link indira:reload/0}
 %%%     </li>
 %%%     <li>
 %%%       <i>pidfile</i> ({@type file:filename()}) -- path to a pidfile to
@@ -31,14 +36,14 @@
 %%%     <li>
 %%%       <i>net</i> ({@type @{Node :: atom(), NameType :: shortnames |
 %%%       longnames, Cookie :: atom() | @{file, file:filename()@} | none@}})
-%%%       -- distributed Erlang network configuration; see {@link
-%%%       distributed/3} for details
+%%%       -- distributed Erlang network configuration
 %%%     </li>
 %%%     <li>
 %%%       <i>net_start</i> ({@type boolean()}; default: `false') -- whether to
 %%%       configure Erlang networking according to <i>net</i> setting at
 %%%       Indira's start or delay it; networking can be started and stopped
-%%%       using {@link distributed_start/0} and {@link distributed_stop/0}
+%%%       using {@link indira:distributed_start/0} and
+%%%       {@link indira:distributed_stop/0}
 %%%     </li>
 %%%     <li>
 %%%       <i>start_before</i> ({@type [App :: atom()]}) -- list of
@@ -71,8 +76,8 @@
 %%%   This migt be useful trick for injecting Indira to already written
 %%%   services, e.g. to provide additional instrumentation. Note that
 %%%   `example_command_handler' doesn't even need to come from original
-%%%   service -- it could be a custom module. Consult {@link
-%%%   gen_indira_command} to see how to write one.
+%%%   service -- it could be a custom module. Consult
+%%%   {@link gen_indira_command} to see how to write one.
 %%%
 %%%   === Setup with `-config myapp.config' ===
 %%%
@@ -103,12 +108,16 @@
 %#!/usr/bin/escript
 %
 %main(_Args) ->
-%  indira_app:indira_setup([
-%    {listen, [{indira_tcp, {"localhost", 16667}}]},
+%  indira:indira_setup([
+%    {listen, [
+%      {indira_tcp, {"localhost", 16667}}
+%    ]},
 %    {command, fun(C) -> handle_command_fun(C) end}
 %  ]),
-%  indira_app:start_rec(indira),
-%  indira_app:sleep_forever().
+%  % note that this starts Indira as the only application; you may want to
+%  % use `indira:daemonize(SomeApp, [])' instead of these two
+%  indira:start_rec(indira),
+%  indira:sleep_forever().
 %
 % % simple and dumb command handler
 % % note that this will be passed as a fun, not as a module handler;
@@ -127,14 +136,13 @@
 %#!/usr/bin/escript
 %
 %main(_Args) ->
-%  % this is an alternative to indira_app:indira_setup/1 and
-%  % indira_app:set_option/3
+%  % this is an alternative to indira:indira_setup/1 and indira:set_env/2
 %  % note that application needs to be loaded for application:set_env/3
 %  application:load(indira),
 %  application:set_env(indira, listen, [{indira_tcp, {"localhost", 16667}}]),
 %  application:set_env(indira, command, fun(C) -> handle_command_fun(C) end),
-%  indira_app:start_rec(indira),
-%  indira_app:sleep_forever().
+%  indira:start_rec(indira),
+%  indira:sleep_forever().
 %...
 %'''
 %%%

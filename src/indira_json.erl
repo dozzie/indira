@@ -10,6 +10,8 @@
 %%%   Note that Erlang strings are generally recognized as arrays of integers.
 %%%   Note also that tuples alone are not allowed. They can only compose
 %%%   proplists that will be serialized to a JSON object.
+%%%
+%%%   This module can be used before Indira application starts.
 %%% @end
 %%%---------------------------------------------------------------------------
 
@@ -19,7 +21,7 @@
 -export([format_error/1]).
 
 -export_type([json_string/0, struct/0]).
--export_type([jhash/0, jarray/0, jscalar/0]).
+-export_type([jhash/0, jarray/0, jscalar/0, jstring/0]).
 
 %%%---------------------------------------------------------------------------
 
@@ -199,10 +201,10 @@ encode_unicode(Char) ->
 %% @doc Encode number (integer or float) as a string.
 
 -spec encode_number(number()) ->
-  string().
+  iolist().
 
 encode_number(N) when is_float(N) ->
-  float_to_list(N);
+  io_lib:write(N); % output of float_to_list() looks too complex and ugly
 encode_number(N) when is_integer(N) ->
   integer_to_list(N).
 

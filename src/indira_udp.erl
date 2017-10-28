@@ -12,10 +12,30 @@
 %%%     <li>`` 'any' '' to indicate no binding to any particular interface</li>
 %%%   </ul>
 %%%
+%%%   === usage example ===
+%%%
+%```
+%indira:indira_setup([
+%  {listen, [
+%    {indira_udp, {"daemon.example.net", 1638}},
+%    {indira_udp, {{127,0,0,1}, 1639}},
+%    {indira_udp, {any, 1640}}
+%  ]},
+%  ...
+%]).
+%'''
+%%%
 %%%   == Returned errors ==
 %%%
-%%%   Errors returned by this module can all (except for `{error,
-%%%   timeout}') be parsed by {@link inet:format_error/1}.
+%%%   This module returns through
+%%%   {@link gen_indira_socket:send_one_command/4} following errors:
+%%%
+%%%   <ul>
+%%%     <li>`timeout' -- command send timeout timeout</li>
+%%%     <li>`closed' -- socket closed during receiving reply</li>
+%%%     <li>`badarg' -- invalid socket address</li>
+%%%     <li>{@type inet:posix()}</li>
+%%%   </ul>
 %%% @end
 %%%---------------------------------------------------------------------------
 
@@ -30,6 +50,7 @@
 %% gen_indira_socket interface
 -export([child_spec/1]).
 -export([send_one_line/3, retry_send_one_line/3]).
+-export([format_error/1]).
 
 %% gen_server callbacks
 -export([init/1, terminate/2]).
@@ -108,6 +129,22 @@ send_one_line({Addr, Port} = _Address, Line, Timeout) ->
 
 retry_send_one_line(Address, Line, Timeout) ->
   send_one_line(Address, Line, Timeout).
+
+%% }}}
+%%----------------------------------------------------------
+%% format_error() {{{
+
+%% @private
+%% @doc Make a printable message from an error returned from a function from
+%%   this module.
+
+-spec format_error(Reason :: gen_indira_socket:error()) ->
+  iolist().
+
+format_error(badarg)  -> "invalid argument";
+format_error(timeout) -> "operation timed out";
+format_error(closed)  -> "connection is closed";
+format_error(Reason) -> inet:format_error(Reason).
 
 %% }}}
 %%----------------------------------------------------------

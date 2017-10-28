@@ -46,8 +46,7 @@ take_over(Socket) ->
   case indira_unix_conn_sup:spawn_worker(Socket) of
     {ok, Pid} ->
       ok = indira_af_unix:controlling_process(Socket, Pid),
-      % FIXME: `indira_af_unix' doesn't support `{active, once}' sockets yet
-      indira_af_unix:setopts(Socket, [{active, true}]),
+      indira_af_unix:setopts(Socket, [{active, once}]),
       {ok, Pid};
     {error, Reason} ->
       indira_af_unix:close(Socket),
@@ -81,8 +80,8 @@ start_link(Socket) ->
 %% @doc Initialize {@link gen_server} state.
 
 init([Socket] = _Args) ->
-  % TODO: socket address (path)
-  indira_log:set_context(unix, []),
+  {ok, {_Device, _Inode, Path}} = indira_af_unix:stat(Socket),
+  indira_log:set_context(unix, [{socket, Path}]),
   State = #state{socket = Socket},
   {ok, State}.
 
@@ -118,6 +117,7 @@ handle_info({result, Line} = _Message,
             State = #state{socket = Socket}) ->
   case indira_af_unix:send(Socket, [Line, $\n]) of
     ok ->
+      indira_af_unix:setopts(Socket, [{active, once}]),
       {noreply, State};
     {error, Reason} ->
       indira_log:info("connection error", [{error, Reason}]),

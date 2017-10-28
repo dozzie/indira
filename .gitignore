@@ -1,9 +1,15 @@
 .*.swp
 *.beam
+*.plt
+indira.d
+/.erlang.mk
 /ebin/*.app
 /doc/edoc-info
 /doc/*.png
 /doc/*.html
 /doc/*.css
-/c_src/*.o
 /priv/*.so
+/priv/indira_unix_unlinker
+/c_src/env.mk
+/c_src/deps.mk
+/c_src/*.o

@@ -43,7 +43,10 @@ init(_Args) ->
       permanent, 5000, worker, [indira_pidfile]},
     {indira_dist_erl,
       {indira_dist_erl, start_link, []},
-      permanent, 5000, worker, [indira_dist_erl]}
+      permanent, 5000, worker, [indira_dist_erl]},
+    {indira_af_unix_manager,
+      {indira_af_unix_manager, start_link, []},
+      permanent, 5000, worker, [indira_af_unix_manager]}
   ],
   {ok, {Strategy, Children}}.
 
