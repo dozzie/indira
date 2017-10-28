@@ -1,3 +1,15 @@
+erlang-indira (1.0.0-1) stable; urgency=low
+
+  * Improvements in AF_UNIX sockets (support for longer lines, auto-unlinking
+    on BEAM crash, setting permissions and ownership of listening sockets).
+  * Major API reorganization
+    - functions from indira_app and indira_cli modules moved elsewhere
+    - stabilized interface for configuring applications
+    - module for reading from STDIN
+    - other minor changes
+
+ -- Stanislaw Klekot <dozzie@jarowit.net>  Sat, 28 Oct 2017 17:03:42 +0200
+
 erlang-indira (0.9.0-1) stable; urgency=low
 
   * Ground-up rewrite of the internals and public API cleanup.
