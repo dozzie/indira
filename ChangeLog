@@ -1,0 +1,32 @@
+version 1.0.0
+
+  * Added "indira_stdio" module for reading from STDIN with proper
+    backpressure.
+  * Added "workdir" option to indira_setup() function. It was already
+    supported if set with application:set_env().
+  * Added format_error() functions to convert errors returned by Indira to
+    printable messages.
+  * Added a helper for reloading configuration of daemonized application.
+  * Added helpers for checking if an application is started.
+  * Added an option to set permissions and ownership on a unix socket.
+  * Added a watcher process that unlinks stale unix sockets on Erlang VM
+    crash.
+  * Unix sockets port driver replaced with code from one of my other projects.
+  * Shortened typical float representation in JSON serializer.
+  * Changed build system to erlang.mk.
+
+  Backward incompatible changes:
+
+  * Functions from public API moved to different modules (from indira_cli to
+    gen_indira_cli module, from indira_app to indira module).
+  * Old set_env() function replaced a better way of configuring applications
+    that is easier to use for reloading config.
+  * Module for working with AF_UNIX sockets (indira_af_unix) is no longer
+    a public interface.
+  * Errors from parse_arguments() and format_request() gen_indira_cli
+    callbacks are now returned verbatim instead of wrapped in tagged tuple.
+
+version 0.9.0
+
+  * Initial public release.
+

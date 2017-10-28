@@ -1,6 +1,6 @@
 @author Stanislaw Klekot <dozzie@jarowit.net>
 @title Indira, Mother of Daemons.
-@version 0.9.0
+@version 1.0.0
 @see indira
 @see gen_indira_cli
 @see gen_indira_command
