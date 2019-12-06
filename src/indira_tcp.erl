@@ -61,6 +61,7 @@
 %%% types {{{
 
 -define(TCP_LISTEN_INTERVAL, 100).
+-define(MAX_LINE_LENGTH, 64 * 1024 * 1024).
 
 -record(state, {
   socket :: gen_tcp:socket()
@@ -95,7 +96,11 @@ child_spec({Host, Port} = _BindAddr) ->
   {ok, iolist()} | {error, term()}.
 
 send_one_line({Addr, Port} = _Address, Line, Timeout) ->
-  case gen_tcp:connect(Addr, Port, [{active, false}, binary, {packet, line}]) of
+  ConnectOpts = [
+    {active, false},
+    binary, {packet, line}, {packet_size, ?MAX_LINE_LENGTH}
+  ],
+  case gen_tcp:connect(Addr, Port, ConnectOpts) of
     {ok, Sock} ->
       case gen_tcp:send(Sock, [Line, $\n]) of
         ok ->
