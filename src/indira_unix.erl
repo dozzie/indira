@@ -114,7 +114,10 @@ child_spec(SocketPath) ->
 
 send_one_line(SocketPath, Line, Timeout) ->
   ok = indira_af_unix:load_port_driver(),
-  ConnectOpts = [binary, {active, false}, {packet_size, ?MAX_LINE_LENGTH}],
+  ConnectOpts = [
+    {active, false},
+    binary, {packet, line}, {packet_size, ?MAX_LINE_LENGTH}
+  ],
   case indira_af_unix:connect(SocketPath, ConnectOpts) of
     {ok, Sock} ->
       indira_af_unix:send(Sock, [Line, $\n]),
@@ -219,7 +222,8 @@ start_link(SocketPath) ->
 
 init([Address] = _Args) ->
   {SocketPath, Mode, User, Group} = decode_address(Address),
-  case indira_af_unix:listen(SocketPath, [binary, {packet, line}]) of
+  ListenOpts = [binary, {packet, line}, {packet_size, ?MAX_LINE_LENGTH}],
+  case indira_af_unix:listen(SocketPath, ListenOpts) of
     {ok, Socket} ->
       case Mode of
         undefined -> ok;

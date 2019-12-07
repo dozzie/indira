@@ -1,3 +1,9 @@
+version 1.0.1
+
+  * Fixed message length problem in control sockets (TCP and AF_UNIX) for
+    cases when a request or a reply would be longer than kernel buffer.
+  * Minor clarification in docs.
+
 version 1.0.0
 
   * Added "indira_stdio" module for reading from STDIN with proper

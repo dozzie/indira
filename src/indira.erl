@@ -146,6 +146,9 @@ distributed_reconfigure(Options) ->
 
 %% @doc Synchronize application's environment to the specified values.
 %%
+%%   The environment to set is treated similarly to a proplist, so prepended
+%%   keys have the precedence.
+%%
 %% @see default_env/1
 
 -spec set_env(atom(), Environment :: [Param]) ->
