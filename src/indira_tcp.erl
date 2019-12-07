@@ -279,7 +279,7 @@ listen(Address, Port) ->
   case bind_options(Address) of
     {ok, BindOptions} ->
       Options = [
-        list, {packet, line}, {active, false},
+        list, {packet, line}, {active, false}, {packet_size, ?MAX_LINE_LENGTH},
         {reuseaddr, true}, {keepalive, true} |
         BindOptions
       ],
