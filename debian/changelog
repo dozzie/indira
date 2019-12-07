@@ -1,3 +1,9 @@
+erlang-indira (1.0.1-1) stable; urgency=low
+
+  * Fixed message length problem in control sockets, mainly for long replies.
+
+ -- Stanislaw Klekot <dozzie@jarowit.net>  Sat, 07 Dec 2019 20:12:05 +0100
+
 erlang-indira (1.0.0-2) stable; urgency=low
 
   * Packaging update for Debian 9 and later.
