@@ -1,6 +1,6 @@
 {application, indira, [
   {description, "daemonization helper tools"},
-  {vsn, "1.0.0"},
+  {vsn, "1.0.1"},
   {registered, [
     indira_sup,
     indira_boot_sup,
